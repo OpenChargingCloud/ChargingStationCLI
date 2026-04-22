@@ -1,0 +1,18 @@
+[submodule "libs/Styx"]
+	path = libs/Styx
+	url = ssh://git@git.graphdefined.com:5001/Vanaheimr/Styx.git
+[submodule "libs/Hermod"]
+	path = libs/Hermod
+	url = ssh://git@git.graphdefined.com:5001/Vanaheimr/Hermod.git
+[submodule "libs/Norn"]
+	path = libs/Norn
+	url = ssh://git@git.graphdefined.com:5001/Vanaheimr/Norn.git
+[submodule "libs/MCP"]
+	path = libs/MCP
+	url = ssh://git@git.graphdefined.com:5001/Vanaheimr/MCP.git
+[submodule "libs/WWCP_OCPP"]
+	path = libs/WWCP_OCPP
+	url = ssh://git@git.graphdefined.com:5001/OpenChargingCloud/WWCP_OCPP.git
+[submodule "libs/WWCP_Core"]
+	path = libs/WWCP_Core
+	url = ssh://git@git.graphdefined.com:5001/OpenChargingCloud/WWCP_Core.git
