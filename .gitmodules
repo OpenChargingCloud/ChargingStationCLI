@@ -16,6 +16,9 @@
 [submodule "libs/WWCP_Core"]
 	path = libs/WWCP_Core
 	url = ssh://git@git.graphdefined.com:5001/OpenChargingCloud/WWCP_Core.git
-[submodule "libs/WWCP_15118"]
-	path = libs/WWCP_15118
+[submodule "libs/WWCP_ISO15118"]
+	path = libs/WWCP_ISO15118
 	url = ssh://git@git.graphdefined.com:5001/OpenChargingCloud/WWCP_ISO15118.git
+[submodule "libs/Urdr"]
+	path = libs/Urdr
+	url = ssh://git@git.graphdefined.com:5001/Vanaheimr/Urdr.git
