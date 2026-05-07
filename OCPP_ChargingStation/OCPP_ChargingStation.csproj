@@ -11,8 +11,16 @@
     <ProjectReference Include="..\libs\Hermod\Hermod\Hermod.csproj" />
     <ProjectReference Include="..\libs\Norn\NornDroneHTTPAPI\NornDroneHTTPAPI.csproj" />
     <ProjectReference Include="..\libs\Norn\NornDroneWebAPI\NornDroneWebAPI.csproj" />
+    <ProjectReference Include="..\libs\Norn\NornHTTPAPI\NornHTTPAPI.csproj" />
+    <ProjectReference Include="..\libs\Norn\NornWebAPI\NornWebAPI.csproj" />
     <ProjectReference Include="..\libs\Norn\Norn\Norn.csproj" />
     <ProjectReference Include="..\libs\Styx\Styx\Styx.csproj" />
+    <ProjectReference Include="..\libs\WWCP_15118\WWCP_ISO15118_20\WWCP_ISO15118_20.csproj" />
+    <ProjectReference Include="..\libs\WWCP_15118\WWCP_ISO15118_2\WWCP_ISO15118_2.csproj" />
+    <ProjectReference Include="..\libs\WWCP_15118\WWCP_ISO15118_NetworkInterfaces\WWCP_ISO15118_NetworkInterfaces.csproj" />
+    <ProjectReference Include="..\libs\WWCP_15118\WWCP_ISO15118_SDP\WWCP_ISO15118_SDP.csproj" />
+    <ProjectReference Include="..\libs\WWCP_15118\WWCP_ISO15118_SLAC\WWCP_ISO15118_SLAC.csproj" />
+    <ProjectReference Include="..\libs\WWCP_15118\WWCP_ISO15118_V2GTP\WWCP_ISO15118_V2GTP.csproj" />
     <ProjectReference Include="..\libs\WWCP_Core\WWCP_CoreData\WWCP_CoreData.csproj" />
     <ProjectReference Include="..\libs\WWCP_OCPP\WWCP_OCPPv1.6\WWCP_OCPPv1.6.csproj" />
     <ProjectReference Include="..\libs\WWCP_OCPP\WWCP_OCPPv1.6_ChargePoint\WWCP_OCPPv1.6_ChargePoint.csproj" />
