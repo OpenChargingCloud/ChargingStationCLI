@@ -2,20 +2,37 @@
   <Folder Name="/Dependencies/" />
   <Folder Name="/Dependencies/ISO15118/">
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_2/WWCP_ISO15118_2.csproj" />
-    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_20/WWCP_ISO15118_20.csproj" />
-    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_2_Tests/WWCP_ISO15118_2_Tests.csproj" />
-    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_20_Tests/WWCP_ISO15118_20_Tests.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_20.AC/WWCP_ISO15118_20.AC.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_20.ACDP/WWCP_ISO15118_20.ACDP.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_20.AC_DER_IEC/WWCP_ISO15118_20.AC_DER_IEC.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_20.AC_DER_SAE/WWCP_ISO15118_20.AC_DER_SAE.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_20.CommonMessages/WWCP_ISO15118_20.CommonMessages.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_20.DC/WWCP_ISO15118_20.DC.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_20.WPT/WWCP_ISO15118_20.WPT.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_EXI/WWCP_ISO15118_EXI.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_EXI_Dispatch/WWCP_ISO15118_EXI_Dispatch.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_EXI_SourceGenerator/WWCP_ISO15118_EXI_SourceGenerator.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_EXI_Tests/WWCP_ISO15118_EXI_Tests.csproj" />
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_NetworkInterfaces/WWCP_ISO15118_NetworkInterfaces.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_PKI/WWCP_ISO15118_PKIBuilder/WWCP_ISO15118_PKIBuilder.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_PKI/WWCP_ISO15118_PKIBuilderTests/WWCP_ISO15118_PKIBuilderTests.csproj" />
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_SDP/WWCP_ISO15118_SDP.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_SDP_Tests/WWCP_ISO15118_SDP_Tests.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_Session/WWCP_ISO15118_Session.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_Session_Tests/WWCP_ISO15118_Session_Tests.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_SharedCC/WWCP_ISO15118_SharedCC.csproj" />
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_SLAC/WWCP_ISO15118_SLAC.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_SLAC_Tests/WWCP_ISO15118_SLAC_Tests.csproj" />
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_V2GTP/WWCP_ISO15118_V2GTP.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_V2GTP_Tests/WWCP_ISO15118_V2GTP_Tests.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_XMLDSig/WWCP_ISO15118_XMLDSig.csproj" />
   </Folder>
   <Folder Name="/Dependencies/Norn/">
     <Project Path="libs/Norn/Norn/Norn.csproj" />
-    <Project Path="libs/Norn/NornTests/NornTests.csproj" />
     <Project Path="libs/Norn/NornDroneHTTPAPI/NornDroneHTTPAPI.csproj" />
     <Project Path="libs/Norn/NornDroneWebAPI/NornDroneWebAPI.csproj" />
     <Project Path="libs/Norn/NornHTTPAPI/NornHTTPAPI.csproj" />
+    <Project Path="libs/Norn/NornTests/NornTests.csproj" />
     <Project Path="libs/Norn/NornWebAPI/NornWebAPI.csproj" />
   </Folder>
   <Folder Name="/Dependencies/OCPP/">
@@ -26,14 +43,14 @@
     <Project Path="libs/WWCP_OCPP/WWCP_OCPP_Common/WWCP_OCPP_Common.csproj" />
   </Folder>
   <Folder Name="/Dependencies/Urdr/">
-    <Project Path="libs/Urdr/UrdrTests/UrdrTests.csproj" />
     <Project Path="libs/Urdr/Urdr/Urdr.csproj" />
+    <Project Path="libs/Urdr/UrdrTests/UrdrTests.csproj" />
   </Folder>
   <Folder Name="/Dependencies/Vanaheimr/">
-    <Project Path="libs/Styx/Styx/Styx.csproj" />
-    <Project Path="libs/Styx/StyxTests/StyxTests.csproj" />
     <Project Path="libs/Hermod/Hermod/Hermod.csproj" />
     <Project Path="libs/Hermod/HermodTests/HermodTests.csproj" />
+    <Project Path="libs/Styx/Styx/Styx.csproj" />
+    <Project Path="libs/Styx/StyxTests/StyxTests.csproj" />
   </Folder>
   <Folder Name="/Dependencies/WWCP/">
     <Project Path="libs/WWCP_Core/WWCP_CoreData/WWCP_CoreData.csproj" />

@@ -16,7 +16,6 @@
     <ProjectReference Include="..\libs\Norn\NornHTTPAPI\NornHTTPAPI.csproj" />
     <ProjectReference Include="..\libs\Norn\NornWebAPI\NornWebAPI.csproj" />
     <ProjectReference Include="..\libs\Urdr\Urdr\Urdr.csproj" />
-    <ProjectReference Include="..\libs\WWCP_ISO15118\WWCP_ISO15118_20\WWCP_ISO15118_20.csproj" />
     <ProjectReference Include="..\libs\WWCP_ISO15118\WWCP_ISO15118_2\WWCP_ISO15118_2.csproj" />
     <ProjectReference Include="..\libs\WWCP_ISO15118\WWCP_ISO15118_NetworkInterfaces\WWCP_ISO15118_NetworkInterfaces.csproj" />
     <ProjectReference Include="..\libs\WWCP_ISO15118\WWCP_ISO15118_SDP\WWCP_ISO15118_SDP.csproj" />
