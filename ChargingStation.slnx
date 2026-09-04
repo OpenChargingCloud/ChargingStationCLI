@@ -55,5 +55,5 @@
   <Folder Name="/Dependencies/WWCP/">
     <Project Path="libs/WWCP_Core/WWCP_CoreData/WWCP_CoreData.csproj" />
   </Folder>
-  <Project Path="OCPP_ChargingStation/OCPP_ChargingStation.csproj" />
+  <Project Path="ChargingStation/ChargingStation.csproj" />
 </Solution>
