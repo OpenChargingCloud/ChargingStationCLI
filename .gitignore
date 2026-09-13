@@ -263,3 +263,7 @@ __pycache__/
 # The web login of a running charging station: a password hash, and nobody
 # else's business. Written at the first start beside the solution.
 web-login.json
+
+# The EVSEs of a running charging station: what hardware this particular
+# installation has, which is not a property of the source.
+evses.json

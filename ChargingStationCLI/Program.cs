@@ -24,6 +24,7 @@ using org.GraphDefined.Vanaheimr.Hermod;
 using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
 using cloud.charging.open.ChargingStation;
+using cloud.charging.open.ChargingStation.EVSEs;
 using cloud.charging.open.ChargingStation.ISO15118;
 using cloud.charging.open.ChargingStation.Logging;
 using cloud.charging.open.ChargingStation.Web;
@@ -57,6 +58,7 @@ namespace OCPP_ChargingStation
             var      anyAddress     = false;
             String?  frontendDir    = null;
             String?  loginFilePath  = null;
+            String?  evseFilePath   = null;
             var      verbose        = false;
             var      quiet          = false;
             var      noTrace        = false;
@@ -102,6 +104,14 @@ namespace OCPP_ChargingStation
                         if (!TryTakeValue(Arguments, ref i, out loginFilePath))
                         {
                             Console.Error.WriteLine("Missing file after --web-login!");
+                            return 2;
+                        }
+                        break;
+
+                    case "--evses":
+                        if (!TryTakeValue(Arguments, ref i, out evseFilePath))
+                        {
+                            Console.Error.WriteLine("Missing file after --evses!");
                             return 2;
                         }
                         break;
@@ -285,6 +295,10 @@ namespace OCPP_ChargingStation
                                                     loginFilePath ?? Path.Combine(RepositoryRoot(), WebLoginFile.DefaultFileName)
                                                 ),
 
+                              EVSEFile:         new EVSEConfigFile(
+                                                    evseFilePath ?? Path.Combine(RepositoryRoot(), EVSEConfigFile.DefaultFileName)
+                                                ),
+
                               Frontend:         frontend,
 
                               V2G:              v2gOptions,
@@ -324,6 +338,7 @@ namespace OCPP_ChargingStation
                 Console.WriteLine($"  event stream   {station.WebInterfaceURL}api/v1/events");
                 Console.WriteLine($"  frontend from  {station.Frontend.Description}");
                 Console.WriteLine($"  web login      user '{station.Sessions.Username}', {station.LoginFile.Path}");
+                Console.WriteLine($"  EVSEs          {station.EVSEs.Count}: {String.Join(", ", station.EVSEs.Select(evse => evse.ToString()))}");
 
                 if (station.V2G is { } link)
                 {
@@ -434,7 +449,8 @@ namespace OCPP_ChargingStation
         private static void PrintUsage()
         {
             Console.WriteLine("Usage: ChargingStationCLI [--port <number>] [--any] [--frontend <dist directory>]");
-            Console.WriteLine("                          [--web-login <file>] [--verbose | --quiet] [--no-trace]");
+            Console.WriteLine("                          [--web-login <file>] [--evses <file>] [--verbose | --quiet]");
+            Console.WriteLine("                          [--no-trace]");
             Console.WriteLine("                          [--v2g [--v2g-interface <name>] [--v2g-port <n>] [--v2g-cert <file>]");
             Console.WriteLine("                                 [--slac-udp <ip:port>] [--evse-id <id>]]");
             Console.WriteLine();
@@ -449,6 +465,11 @@ namespace OCPP_ChargingStation
             Console.WriteLine($"  --web-login <file>  where the web login lives (default: {WebLoginFile.DefaultFileName} below the");
             Console.WriteLine("                      repository root). Without it a password is made up at the");
             Console.WriteLine($"                      first start for the user '{WebLoginSettings.DefaultUsername}' and shown once.");
+            Console.WriteLine();
+            Console.WriteLine("EVSEs:");
+            Console.WriteLine($"  --evses <file>    where the EVSEs live (default: {EVSEConfigFile.DefaultFileName} below the repository");
+            Console.WriteLine("                    root). Without the file the station has one 22 kW type 2 socket;");
+            Console.WriteLine("                    the Configuration pages of the web interface write it.");
             Console.WriteLine();
             Console.WriteLine("The wire below the charging cable (ISO 15118), off unless asked for:");
             Console.WriteLine("  --v2g             bring up the V2G endpoint, SDP and SLAC");
