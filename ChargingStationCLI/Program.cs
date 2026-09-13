@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of ChargingStation <https://github.com/OpenChargingCloud/ChargingStation>
  *
@@ -17,10 +17,14 @@
 
 #region Usings
 
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+
 using org.GraphDefined.Vanaheimr.Hermod;
 using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
 using cloud.charging.open.ChargingStation;
+using cloud.charging.open.ChargingStation.ISO15118;
 using cloud.charging.open.ChargingStation.Logging;
 using cloud.charging.open.ChargingStation.Web;
 
@@ -34,6 +38,13 @@ namespace OCPP_ChargingStation
     /// </summary>
     public class Program
     {
+
+        /// <summary>
+        /// Where the password of the V2G certificate is read from, so that it
+        /// does not stand in the process list for everybody to see.
+        /// </summary>
+        public const String V2GCertificatePasswordVariable = "CHARGINGSTATION_V2G_CERT_PASSWORD";
+
 
         public static async Task<Int32> Main(String[] Arguments)
         {
@@ -49,6 +60,13 @@ namespace OCPP_ChargingStation
             var      verbose        = false;
             var      quiet          = false;
             var      noTrace        = false;
+
+            var      v2g            = false;
+            String?  v2gInterface   = null;
+            UInt16   v2gPort        = 0;
+            String?  v2gCertFile    = null;
+            String?  slacUDP        = null;
+            var      evseId         = V2GOptions.DefaultEVSEId;
 
             for (var i = 0; i < Arguments.Length; i++)
             {
@@ -102,6 +120,60 @@ namespace OCPP_ChargingStation
                         noTrace = true;
                         break;
 
+                    case "--v2g":
+                        v2g = true;
+                        break;
+
+                    case "--v2g-interface":
+                        if (!TryTakeValue(Arguments, ref i, out v2gInterface))
+                        {
+                            Console.Error.WriteLine("Missing interface name after --v2g-interface!");
+                            return 2;
+                        }
+                        v2g = true;
+                        break;
+
+                    case "--v2g-port":
+                        if (i + 1 < Arguments.Length && UInt16.TryParse(Arguments[i + 1], out v2gPort))
+                        {
+                            i++;
+                            v2g = true;
+                        }
+                        else
+                        {
+                            Console.Error.WriteLine("Missing or invalid port number after --v2g-port!");
+                            return 2;
+                        }
+                        break;
+
+                    case "--v2g-cert":
+                        if (!TryTakeValue(Arguments, ref i, out v2gCertFile))
+                        {
+                            Console.Error.WriteLine("Missing PKCS#12 file after --v2g-cert!");
+                            return 2;
+                        }
+                        v2g = true;
+                        break;
+
+                    case "--slac-udp":
+                        if (!TryTakeValue(Arguments, ref i, out slacUDP))
+                        {
+                            Console.Error.WriteLine("Missing endpoint after --slac-udp!");
+                            return 2;
+                        }
+                        v2g = true;
+                        break;
+
+                    case "--evse-id":
+                        if (!TryTakeValue(Arguments, ref i, out var parsedEVSEId))
+                        {
+                            Console.Error.WriteLine("Missing identification after --evse-id!");
+                            return 2;
+                        }
+                        evseId = parsedEVSEId;
+                        v2g    = true;
+                        break;
+
                     case "-h":
                     case "--help":
                         PrintUsage();
@@ -145,6 +217,56 @@ namespace OCPP_ChargingStation
 
             #endregion
 
+            #region What the vehicle finds on the wire below the cable
+
+            V2GOptions? v2gOptions = null;
+
+            if (v2g)
+            {
+
+                X509Certificate2? v2gCertificate = null;
+
+                if (v2gCertFile is not null)
+                {
+                    try
+                    {
+                        v2gCertificate = X509CertificateLoader.LoadPkcs12FromFile(
+                                             v2gCertFile,
+                                             Environment.GetEnvironmentVariable(V2GCertificatePasswordVariable)
+                                         );
+                    }
+                    catch (Exception e)
+                    {
+                        Console.Error.WriteLine($"The V2G certificate '{v2gCertFile}' could not be read: {e.Message}");
+                        Console.Error.WriteLine($"A password is taken from the environment variable {V2GCertificatePasswordVariable}.");
+                        return 2;
+                    }
+                }
+
+                IPEndPoint? slacEndpoint = null;
+
+                if (slacUDP is not null && !IPEndPoint.TryParse(slacUDP, out slacEndpoint))
+                {
+                    Console.Error.WriteLine($"'{slacUDP}' is not an address and port, e.g. 127.0.0.1:9000 or 127.0.0.1:0!");
+                    return 2;
+                }
+
+                v2gOptions = new V2GOptions {
+                                 Enabled            = true,
+                                 InterfaceName      = v2gInterface,
+                                 V2GPort            = v2gPort,
+                                 ServerCertificate  = v2gCertificate,
+                                 EVSEId             = evseId,
+                                 SlacTransport      = slacEndpoint is not null
+                                                          ? SlacTransportKind.UDP
+                                                          : SlacTransportKind.Auto,
+                                 SlacUDPEndpoint    = slacEndpoint
+                             };
+
+            }
+
+            #endregion
+
             #region The station
 
             ChargingStation station;
@@ -164,6 +286,8 @@ namespace OCPP_ChargingStation
                                                 ),
 
                               Frontend:         frontend,
+
+                              V2G:              v2gOptions,
 
                               ConsoleLogLevel:  verbose ? LogLevel.Debug
                                                     : quiet ? LogLevel.Warning
@@ -200,6 +324,14 @@ namespace OCPP_ChargingStation
                 Console.WriteLine($"  event stream   {station.WebInterfaceURL}api/v1/events");
                 Console.WriteLine($"  frontend from  {station.Frontend.Description}");
                 Console.WriteLine($"  web login      user '{station.Sessions.Username}', {station.LoginFile.Path}");
+
+                if (station.V2G is { } link)
+                {
+                    Console.WriteLine($"  V2G endpoint   {link.V2GEndpoint?.ToString() ?? "not listening"}" +
+                                      (link.V2GEndpoint is not null ? link.UsesTLS ? ", TLS 1.3" : ", plain TCP" : ""));
+                    Console.WriteLine($"  SDP            {(link.SDPRunning  ? $"answering on '{link.Interface?.Name}'" : "not running")}");
+                    Console.WriteLine($"  SLAC           {(link.SLACRunning ? "listening" : "not running")}");
+                }
 
                 if (station.GeneratedPassword is not null)
                 {
@@ -303,6 +435,8 @@ namespace OCPP_ChargingStation
         {
             Console.WriteLine("Usage: ChargingStationCLI [--port <number>] [--any] [--frontend <dist directory>]");
             Console.WriteLine("                          [--web-login <file>] [--verbose | --quiet] [--no-trace]");
+            Console.WriteLine("                          [--v2g [--v2g-interface <name>] [--v2g-port <n>] [--v2g-cert <file>]");
+            Console.WriteLine("                                 [--slac-udp <ip:port>] [--evse-id <id>]]");
             Console.WriteLine();
             Console.WriteLine("Web interface:");
             Console.WriteLine($"  --port <number>   TCP port to listen on (default: {ChargingStation.DefaultHTTPPort})");
@@ -315,6 +449,26 @@ namespace OCPP_ChargingStation
             Console.WriteLine($"  --web-login <file>  where the web login lives (default: {WebLoginFile.DefaultFileName} below the");
             Console.WriteLine("                      repository root). Without it a password is made up at the");
             Console.WriteLine($"                      first start for the user '{WebLoginSettings.DefaultUsername}' and shown once.");
+            Console.WriteLine();
+            Console.WriteLine("The wire below the charging cable (ISO 15118), off unless asked for:");
+            Console.WriteLine("  --v2g             bring up the V2G endpoint, SDP and SLAC");
+            Console.WriteLine("  --v2g-interface <name>");
+            Console.WriteLine("                    the interface the vehicle is on, i.e. the powerline modem;");
+            Console.WriteLine("                    without one the first candidate with an IPv6 link-local");
+            Console.WriteLine("                    address is taken, and the console says which");
+            Console.WriteLine("  --v2g-port <n>    the TCP port of the V2G endpoint; without one the operating");
+            Console.WriteLine("                    system picks a free one, which is what SDP then advertises");
+            Console.WriteLine("  --v2g-cert <file> a PKCS#12 certificate for the V2G endpoint, so that it speaks");
+            Console.WriteLine("                    TLS 1.3 as ISO 15118-20 requires; the password is read from");
+            Console.WriteLine($"                    the environment variable {V2GCertificatePasswordVariable}.");
+            Console.WriteLine("                    Without a certificate the endpoint speaks plain TCP and SDP");
+            Console.WriteLine("                    says so, rather than sending vehicles into a handshake that");
+            Console.WriteLine("                    cannot finish");
+            Console.WriteLine("  --slac-udp <ip:port>");
+            Console.WriteLine("                    run SLAC over a simulated medium instead of a powerline modem,");
+            Console.WriteLine("                    e.g. 127.0.0.1:0 for a bench. Without this, SLAC needs");
+            Console.WriteLine("                    AF_PACKET and therefore Linux, and says so where it cannot");
+            Console.WriteLine($"  --evse-id <id>    what SLAC hands a vehicle (default: {V2GOptions.DefaultEVSEId})");
             Console.WriteLine();
             Console.WriteLine("Log:");
             Console.WriteLine("  -v, --verbose     write every entry to the console, down to the debug ones");
