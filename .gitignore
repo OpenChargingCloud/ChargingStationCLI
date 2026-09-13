@@ -259,3 +259,7 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+
+# The web login of a running charging station: a password hash, and nobody
+# else's business. Written at the first start beside the solution.
+web-login.json

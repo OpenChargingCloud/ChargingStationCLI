@@ -22,3 +22,6 @@
 [submodule "libs/Urdr"]
 	path = libs/Urdr
 	url = ssh://git@git.graphdefined.com:5001/Vanaheimr/Urdr.git
+[submodule "libs/ChargingStation"]
+	path = libs/ChargingStation
+	url = ssh://git@git.graphdefined.com:5001/OpenChargingCloud/ChargingStation.git

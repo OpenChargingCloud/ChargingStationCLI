@@ -1,5 +1,7 @@
 <Solution>
-  <Folder Name="/Dependencies/" />
+  <Folder Name="/Dependencies/">
+    <Project Path="libs/ChargingStation/ChargingStation/ChargingStation.csproj" Id="9ec046e3-9442-4ac1-9936-9df4394ebd36" />
+  </Folder>
   <Folder Name="/Dependencies/ISO15118/">
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_2/WWCP_ISO15118_2.csproj" />
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_20.AC/WWCP_ISO15118_20.AC.csproj" />
@@ -55,5 +57,5 @@
   <Folder Name="/Dependencies/WWCP/">
     <Project Path="libs/WWCP_Core/WWCP_CoreData/WWCP_CoreData.csproj" />
   </Folder>
-  <Project Path="ChargingStation/ChargingStation.csproj" />
+  <Project Path="ChargingStationCLI/ChargingStationCLI.csproj" />
 </Solution>

@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\libs\ChargingStation\ChargingStation\ChargingStation.csproj" />
     <ProjectReference Include="..\libs\Styx\Styx\Styx.csproj" />
     <ProjectReference Include="..\libs\Hermod\Hermod\Hermod.csproj" />
     <ProjectReference Include="..\libs\Norn\Norn\Norn.csproj" />
