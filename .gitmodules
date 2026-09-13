@@ -1,27 +1,27 @@
 [submodule "libs/Styx"]
 	path = libs/Styx
-	url = ssh://git@git.graphdefined.com:5001/Vanaheimr/Styx.git
+	url = https://github.com/Vanaheimr/Styx.git
 [submodule "libs/Hermod"]
 	path = libs/Hermod
-	url = ssh://git@git.graphdefined.com:5001/Vanaheimr/Hermod.git
+	url = https://github.com/Vanaheimr/Hermod.git
 [submodule "libs/Norn"]
 	path = libs/Norn
-	url = ssh://git@git.graphdefined.com:5001/Vanaheimr/Norn.git
+	url = https://github.com/Vanaheimr/Norn.git
 [submodule "libs/MCP"]
 	path = libs/MCP
-	url = ssh://git@git.graphdefined.com:5001/Vanaheimr/MCP.git
+	url = https://github.com/Vanaheimr/MCP.git
 [submodule "libs/WWCP_OCPP"]
 	path = libs/WWCP_OCPP
-	url = ssh://git@git.graphdefined.com:5001/OpenChargingCloud/WWCP_OCPP.git
+	url = https://github.com/OpenChargingCloud/WWCP_OCPP.git
 [submodule "libs/WWCP_Core"]
 	path = libs/WWCP_Core
-	url = ssh://git@git.graphdefined.com:5001/OpenChargingCloud/WWCP_Core.git
+	url = https://github.com/OpenChargingCloud/WWCP_Core.git
 [submodule "libs/WWCP_ISO15118"]
 	path = libs/WWCP_ISO15118
-	url = ssh://git@git.graphdefined.com:5001/OpenChargingCloud/WWCP_ISO15118.git
+	url = https://github.com/OpenChargingCloud/WWCP_ISO15118.git
 [submodule "libs/Urdr"]
 	path = libs/Urdr
-	url = ssh://git@git.graphdefined.com:5001/Vanaheimr/Urdr.git
+	url = https://github.com/Vanaheimr/Urdr.git
 [submodule "libs/ChargingStation"]
 	path = libs/ChargingStation
-	url = ssh://git@git.graphdefined.com:5001/OpenChargingCloud/ChargingStation.git
+	url = https://github.com/OpenChargingCloud/ChargingStation.git
