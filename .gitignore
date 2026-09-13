@@ -264,6 +264,7 @@ __pycache__/
 # else's business. Written at the first start beside the solution.
 web-login.json
 
-# The EVSEs of a running charging station: what hardware this particular
-# installation has, which is not a property of the source.
-evses.json
+# What a running charging station is configured as: its name servers, its time
+# server and its EVSEs. A property of this particular installation, not of the
+# source.
+configuration.json

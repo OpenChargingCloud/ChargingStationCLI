@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of ChargingStation <https://github.com/OpenChargingCloud/ChargingStation>
  *
@@ -24,7 +24,7 @@ using org.GraphDefined.Vanaheimr.Hermod;
 using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
 using cloud.charging.open.ChargingStation;
-using cloud.charging.open.ChargingStation.EVSEs;
+using cloud.charging.open.ChargingStation.Configuration;
 using cloud.charging.open.ChargingStation.ISO15118;
 using cloud.charging.open.ChargingStation.Logging;
 using cloud.charging.open.ChargingStation.Web;
@@ -58,7 +58,7 @@ namespace OCPP_ChargingStation
             var      anyAddress     = false;
             String?  frontendDir    = null;
             String?  loginFilePath  = null;
-            String?  evseFilePath   = null;
+            String?  configFilePath = null;
             var      verbose        = false;
             var      quiet          = false;
             var      noTrace        = false;
@@ -108,10 +108,10 @@ namespace OCPP_ChargingStation
                         }
                         break;
 
-                    case "--evses":
-                        if (!TryTakeValue(Arguments, ref i, out evseFilePath))
+                    case "--config":
+                        if (!TryTakeValue(Arguments, ref i, out configFilePath))
                         {
-                            Console.Error.WriteLine("Missing file after --evses!");
+                            Console.Error.WriteLine("Missing file after --config!");
                             return 2;
                         }
                         break;
@@ -295,8 +295,8 @@ namespace OCPP_ChargingStation
                                                     loginFilePath ?? Path.Combine(RepositoryRoot(), WebLoginFile.DefaultFileName)
                                                 ),
 
-                              EVSEFile:         new EVSEConfigFile(
-                                                    evseFilePath ?? Path.Combine(RepositoryRoot(), EVSEConfigFile.DefaultFileName)
+                              ConfigFile:       new StationConfigFile(
+                                                    configFilePath ?? Path.Combine(RepositoryRoot(), StationConfigFile.DefaultFileName)
                                                 ),
 
                               Frontend:         frontend,
@@ -338,7 +338,10 @@ namespace OCPP_ChargingStation
                 Console.WriteLine($"  event stream   {station.WebInterfaceURL}api/v1/events");
                 Console.WriteLine($"  frontend from  {station.Frontend.Description}");
                 Console.WriteLine($"  web login      user '{station.Sessions.Username}', {station.LoginFile.Path}");
+                Console.WriteLine($"  configuration  {station.ConfigFile.Path}");
                 Console.WriteLine($"  EVSEs          {station.EVSEs.Count}: {String.Join(", ", station.EVSEs.Select(evse => evse.ToString()))}");
+                Console.WriteLine($"  name servers   {(station.DNSEnabled ? String.Join(", ", station.DNSClient.DNSServers) : "switched off")}");
+                Console.WriteLine($"  time server    {station.NTSClient.Hostname}{(station.NTSEnabled ? "" : " (switched off)")}");
 
                 if (station.V2G is { } link)
                 {
@@ -449,7 +452,7 @@ namespace OCPP_ChargingStation
         private static void PrintUsage()
         {
             Console.WriteLine("Usage: ChargingStationCLI [--port <number>] [--any] [--frontend <dist directory>]");
-            Console.WriteLine("                          [--web-login <file>] [--evses <file>] [--verbose | --quiet]");
+            Console.WriteLine("                          [--web-login <file>] [--config <file>] [--verbose | --quiet]");
             Console.WriteLine("                          [--no-trace]");
             Console.WriteLine("                          [--v2g [--v2g-interface <name>] [--v2g-port <n>] [--v2g-cert <file>]");
             Console.WriteLine("                                 [--slac-udp <ip:port>] [--evse-id <id>]]");
@@ -466,10 +469,12 @@ namespace OCPP_ChargingStation
             Console.WriteLine("                      repository root). Without it a password is made up at the");
             Console.WriteLine($"                      first start for the user '{WebLoginSettings.DefaultUsername}' and shown once.");
             Console.WriteLine();
-            Console.WriteLine("EVSEs:");
-            Console.WriteLine($"  --evses <file>    where the EVSEs live (default: {EVSEConfigFile.DefaultFileName} below the repository");
-            Console.WriteLine("                    root). Without the file the station has one 22 kW type 2 socket;");
-            Console.WriteLine("                    the Configuration pages of the web interface write it.");
+            Console.WriteLine("Configuration:");
+            Console.WriteLine($"  --config <file>   where the name servers, the time server and the EVSEs of this");
+            Console.WriteLine($"                    station live (default: {StationConfigFile.DefaultFileName} below the repository");
+            Console.WriteLine("                    root). Without the file the station has one 22 kW type 2 socket");
+            Console.WriteLine("                    and the system defaults; the Configuration pages of the web");
+            Console.WriteLine("                    interface write it, and every change there takes effect at once.");
             Console.WriteLine();
             Console.WriteLine("The wire below the charging cable (ISO 15118), off unless asked for:");
             Console.WriteLine("  --v2g             bring up the V2G endpoint, SDP and SLAC");
