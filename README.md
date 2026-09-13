@@ -20,6 +20,19 @@ git submodule update --init --recursive
 They are fetched from GitHub over https, so nothing but git is needed - no
 account, no key.
 
+**On Windows**, turn long paths on first:
+
+```
+git config --global core.longpaths true
+```
+
+The deepest file in the submodules is 143 characters below the clone root, so
+under the classic 260-character limit the root has about 115 characters to
+live in. `D:\src\ChargingStation` is fine; a checkout somewhere below
+`C:\Users\<you>\AppData\Local\Temp\...` is not, and the clone fails halfway
+through a submodule with `Filename too long` rather than at the start.
+Per clone instead of globally: `git clone -c core.longpaths=true ...`.
+
 Then `dotnet build ChargingStationCLI.slnx` and `dotnet run --project
 ChargingStationCLI`. The build needs the .NET 10 SDK and Node.js: the web
 interface is built by npm and embedded into the assembly, so the station is
