@@ -63,6 +63,9 @@ namespace OCPP_ChargingStation
             var      quiet          = false;
             var      noTrace        = false;
 
+            IPPort?  kioskPort      = null;
+            var      noKiosk        = false;
+
             var      v2g            = false;
             String?  v2gInterface   = null;
             UInt16   v2gPort        = 0;
@@ -90,6 +93,23 @@ namespace OCPP_ChargingStation
 
                     case "--any":
                         anyAddress = true;
+                        break;
+
+                    case "--kiosk-port":
+                        if (i + 1 < Arguments.Length && UInt16.TryParse(Arguments[i + 1], out var parsedKioskPort))
+                        {
+                            kioskPort = IPPort.Parse(parsedKioskPort);
+                            i++;
+                        }
+                        else
+                        {
+                            Console.Error.WriteLine("Missing or invalid port number after --kiosk-port!");
+                            return 2;
+                        }
+                        break;
+
+                    case "--no-kiosk":
+                        noKiosk = true;
                         break;
 
                     case "--frontend":
@@ -291,6 +311,15 @@ namespace OCPP_ChargingStation
 
                               HTTPPort:         port,
 
+                              // The display is its own server on its own port,
+                              // so that it and the administration can be bound
+                              // to different addresses and firewalled apart -
+                              // see KioskHTTPAPI. It follows --any, because a
+                              // display on a screen is normally the one of the
+                              // two that has to be reachable from elsewhere.
+                              KioskPort:        kioskPort,
+                              NoKiosk:          noKiosk,
+
                               LoginFile:        new WebLoginFile(
                                                     loginFilePath ?? Path.Combine(RepositoryRoot(), WebLoginFile.DefaultFileName)
                                                 ),
@@ -334,12 +363,17 @@ namespace OCPP_ChargingStation
 
                 Console.WriteLine();
                 Console.WriteLine($"  web interface  {station.WebInterfaceURL}");
+                Console.WriteLine($"  display        {station.KioskURL?.ToString() ?? "switched off (--no-kiosk)"}{(station.KioskURL.HasValue ? "  (no sign-in)" : "")}");
                 Console.WriteLine($"  JSON API       {station.WebInterfaceURL}api/v1/status");
                 Console.WriteLine($"  event stream   {station.WebInterfaceURL}api/v1/events");
                 Console.WriteLine($"  frontend from  {station.Frontend.Description}");
                 Console.WriteLine($"  web login      user '{station.Sessions.Username}', {station.LoginFile.Path}");
                 Console.WriteLine($"  configuration  {station.ConfigFile.Path}");
                 Console.WriteLine($"  EVSEs          {station.EVSEs.Count}: {String.Join(", ", station.EVSEs.Select(evse => evse.ToString()))}");
+                Console.WriteLine($"  grid           {(station.UplinkPowerLimit_kW.HasValue ? $"up to {station.UplinkPowerLimit_kW.Value} kW" : "no limit configured")}");
+
+                if (station.CalibrationCertificates.Count > 0)
+                    Console.WriteLine($"  calibration    {String.Join(", ", station.CalibrationCertificates.Select(certificate => certificate.Id))}");
                 Console.WriteLine($"  name servers   {(station.DNSEnabled ? String.Join(", ", station.DNSClient.DNSServers) : "switched off")}");
                 Console.WriteLine($"  time server    {station.NTSClient.Hostname}{(station.NTSEnabled ? "" : " (switched off)")}");
 
@@ -464,14 +498,22 @@ namespace OCPP_ChargingStation
             Console.WriteLine("                    bundle embedded in the assembly - use it together with");
             Console.WriteLine("                    'npm run watch' in ChargingStation/Frontend");
             Console.WriteLine();
+            Console.WriteLine("Display:");
+            Console.WriteLine($"  --kiosk-port <n>  the TCP port of the display, the page for the screen on the front");
+            Console.WriteLine($"                    of the station (default: {ChargingStation.DefaultKioskPort}). Its own server on its own");
+            Console.WriteLine("                    port, so that it and the web interface can be bound to");
+            Console.WriteLine("                    different addresses. There is no sign-in on it.");
+            Console.WriteLine("  --no-kiosk        do not listen for the display at all.");
+            Console.WriteLine();
             Console.WriteLine("Web login:");
             Console.WriteLine($"  --web-login <file>  where the web login lives (default: {WebLoginFile.DefaultFileName} below the");
             Console.WriteLine("                      repository root). Without it a password is made up at the");
             Console.WriteLine($"                      first start for the user '{WebLoginSettings.DefaultUsername}' and shown once.");
             Console.WriteLine();
             Console.WriteLine("Configuration:");
-            Console.WriteLine($"  --config <file>   where the name servers, the time server and the EVSEs of this");
-            Console.WriteLine($"                    station live (default: {StationConfigFile.DefaultFileName} below the repository");
+            Console.WriteLine($"  --config <file>   where the name servers, the time server, the EVSEs, the power");
+            Console.WriteLine($"                    limits and the calibration certificates of this station live");
+            Console.WriteLine($"                    (default: {StationConfigFile.DefaultFileName} below the repository");
             Console.WriteLine("                    root). Without the file the station has one 22 kW type 2 socket");
             Console.WriteLine("                    and the system defaults; the Configuration pages of the web");
             Console.WriteLine("                    interface write it, and every change there takes effect at once.");
