@@ -31,7 +31,7 @@ using cloud.charging.open.ChargingStation.Web;
 
 #endregion
 
-namespace OCPP_ChargingStation
+namespace cloud.charging.open.ChargingStation
 {
 
     /// <summary>
@@ -39,6 +39,133 @@ namespace OCPP_ChargingStation
     /// </summary>
     public class Program
     {
+
+
+        #region (private static) TryTakeValue(Arguments, ref Index, out Value)
+
+        private static Boolean TryTakeValue(String[]     Arguments,
+                                            ref Int32    Index,
+                                            out String?  Value)
+        {
+
+            if (Index + 1 < Arguments.Length && !Arguments[Index + 1].StartsWith("--"))
+            {
+                Value = Arguments[++Index];
+                return true;
+            }
+
+            Value = null;
+            return false;
+
+        }
+
+        #endregion
+
+        #region (private static) RepositoryRoot()
+
+        /// <summary>
+        /// The directory holding ChargingStationCLI.slnx, looked up from the
+        /// binary and from the current directory; the current directory when
+        /// neither leads to it.
+        /// </summary>
+        /// <remarks>
+        /// The web login file defaults to a place below it, so that it does not
+        /// end up in bin/ - where the next "dotnet clean" would take the
+        /// station's password with it.
+        /// </remarks>
+        private static String RepositoryRoot()
+        {
+
+            foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
+            {
+
+                var directory = new DirectoryInfo(start);
+
+                while (directory is not null)
+                {
+
+                    if (File.Exists(Path.Combine(directory.FullName, "ChargingStationCLI.slnx")))
+                        return directory.FullName;
+
+                    directory = directory.Parent;
+
+                }
+
+            }
+
+            return Environment.CurrentDirectory;
+
+        }
+
+        #endregion
+
+        #region (private static) PrintUsage()
+
+        private static void PrintUsage()
+        {
+            Console.WriteLine("Usage: ChargingStationCLI [--port <number>] [--any] [--frontend <dist directory>]");
+            Console.WriteLine("                          [--web-login <file>] [--config <file>] [--verbose | --quiet]");
+            Console.WriteLine("                          [--no-trace]");
+            Console.WriteLine("                          [--v2g [--v2g-interface <name>] [--v2g-port <n>] [--v2g-cert <file>]");
+            Console.WriteLine("                                 [--slac-udp <ip:port>] [--evse-id <id>]]");
+            Console.WriteLine();
+            Console.WriteLine("Web interface:");
+            Console.WriteLine($"  --port <number>   TCP port to listen on (default: {ChargingStation.DefaultHTTPPort})");
+            Console.WriteLine("  --any             listen on all addresses instead of 127.0.0.1");
+            Console.WriteLine("  --frontend <dir>  serve the web interface from a directory on disk instead of the");
+            Console.WriteLine("                    bundle embedded in the assembly - use it together with");
+            Console.WriteLine("                    'npm run watch' in ChargingStation/Frontend");
+            Console.WriteLine();
+            Console.WriteLine("Display:");
+            Console.WriteLine($"  --kiosk-port <n>  the TCP port of the display, the page for the screen on the front");
+            Console.WriteLine($"                    of the station (default: {ChargingStation.DefaultKioskPort}). Its own server on its own");
+            Console.WriteLine("                    port, so that it and the web interface can be bound to");
+            Console.WriteLine("                    different addresses. There is no sign-in on it.");
+            Console.WriteLine("  --no-kiosk        do not listen for the display at all.");
+            Console.WriteLine();
+            Console.WriteLine("Web login:");
+            Console.WriteLine($"  --web-login <file>  where the web login lives (default: {WebLoginFile.DefaultFileName} below the");
+            Console.WriteLine("                      repository root). Without it a password is made up at the");
+            Console.WriteLine($"                      first start for the user '{WebLoginSettings.DefaultUsername}' and shown once.");
+            Console.WriteLine();
+            Console.WriteLine("Configuration:");
+            Console.WriteLine($"  --config <file>   where the name servers, the time server, the EVSEs, the power");
+            Console.WriteLine($"                    limits and the calibration certificates of this station live");
+            Console.WriteLine($"                    (default: {StationConfigFile.DefaultFileName} below the repository");
+            Console.WriteLine("                    root). Without the file the station has one 22 kW type 2 socket");
+            Console.WriteLine("                    and the system defaults; the Configuration pages of the web");
+            Console.WriteLine("                    interface write it, and every change there takes effect at once.");
+            Console.WriteLine();
+            Console.WriteLine("The wire below the charging cable (ISO 15118), off unless asked for:");
+            Console.WriteLine("  --v2g             bring up the V2G endpoint, SDP and SLAC");
+            Console.WriteLine("  --v2g-interface <name>");
+            Console.WriteLine("                    the interface the vehicle is on, i.e. the powerline modem;");
+            Console.WriteLine("                    without one the first candidate with an IPv6 link-local");
+            Console.WriteLine("                    address is taken, and the console says which");
+            Console.WriteLine("  --v2g-port <n>    the TCP port of the V2G endpoint; without one the operating");
+            Console.WriteLine("                    system picks a free one, which is what SDP then advertises");
+            Console.WriteLine("  --v2g-cert <file> a PKCS#12 certificate for the V2G endpoint, so that it speaks");
+            Console.WriteLine("                    TLS 1.3 as ISO 15118-20 requires; the password is read from");
+            Console.WriteLine($"                    the environment variable {V2GCertificatePasswordVariable}.");
+            Console.WriteLine("                    Without a certificate the endpoint speaks plain TCP and SDP");
+            Console.WriteLine("                    says so, rather than sending vehicles into a handshake that");
+            Console.WriteLine("                    cannot finish");
+            Console.WriteLine("  --slac-udp <ip:port>");
+            Console.WriteLine("                    run SLAC over a simulated medium instead of a powerline modem,");
+            Console.WriteLine("                    e.g. 127.0.0.1:0 for a bench. Without this, SLAC needs");
+            Console.WriteLine("                    AF_PACKET and therefore Linux, and says so where it cannot");
+            Console.WriteLine($"  --evse-id <id>    what SLAC hands a vehicle (default: {V2GOptions.DefaultEVSEId})");
+            Console.WriteLine();
+            Console.WriteLine("Log:");
+            Console.WriteLine("  -v, --verbose     write every entry to the console, down to the debug ones");
+            Console.WriteLine("  -q, --quiet       write only warnings and worse");
+            Console.WriteLine("      --no-trace    do not pick up what the libraries below write with DebugX");
+            Console.WriteLine();
+            Console.WriteLine("Whatever the console shows, the web interface shows the whole log under 'Logs'.");
+        }
+
+        #endregion
+
 
         /// <summary>
         /// Where the password of the V2G certificate is read from, so that it
@@ -421,132 +548,6 @@ namespace OCPP_ChargingStation
             return 0;
 
         }
-
-
-        #region (private static) TryTakeValue(Arguments, ref Index, out Value)
-
-        private static Boolean TryTakeValue(String[]     Arguments,
-                                            ref Int32    Index,
-                                            out String?  Value)
-        {
-
-            if (Index + 1 < Arguments.Length && !Arguments[Index + 1].StartsWith("--"))
-            {
-                Value = Arguments[++Index];
-                return true;
-            }
-
-            Value = null;
-            return false;
-
-        }
-
-        #endregion
-
-        #region (private static) RepositoryRoot()
-
-        /// <summary>
-        /// The directory holding ChargingStationCLI.slnx, looked up from the
-        /// binary and from the current directory; the current directory when
-        /// neither leads to it.
-        /// </summary>
-        /// <remarks>
-        /// The web login file defaults to a place below it, so that it does not
-        /// end up in bin/ - where the next "dotnet clean" would take the
-        /// station's password with it.
-        /// </remarks>
-        private static String RepositoryRoot()
-        {
-
-            foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
-            {
-
-                var directory = new DirectoryInfo(start);
-
-                while (directory is not null)
-                {
-
-                    if (File.Exists(Path.Combine(directory.FullName, "ChargingStationCLI.slnx")))
-                        return directory.FullName;
-
-                    directory = directory.Parent;
-
-                }
-
-            }
-
-            return Environment.CurrentDirectory;
-
-        }
-
-        #endregion
-
-        #region (private static) PrintUsage()
-
-        private static void PrintUsage()
-        {
-            Console.WriteLine("Usage: ChargingStationCLI [--port <number>] [--any] [--frontend <dist directory>]");
-            Console.WriteLine("                          [--web-login <file>] [--config <file>] [--verbose | --quiet]");
-            Console.WriteLine("                          [--no-trace]");
-            Console.WriteLine("                          [--v2g [--v2g-interface <name>] [--v2g-port <n>] [--v2g-cert <file>]");
-            Console.WriteLine("                                 [--slac-udp <ip:port>] [--evse-id <id>]]");
-            Console.WriteLine();
-            Console.WriteLine("Web interface:");
-            Console.WriteLine($"  --port <number>   TCP port to listen on (default: {ChargingStation.DefaultHTTPPort})");
-            Console.WriteLine("  --any             listen on all addresses instead of 127.0.0.1");
-            Console.WriteLine("  --frontend <dir>  serve the web interface from a directory on disk instead of the");
-            Console.WriteLine("                    bundle embedded in the assembly - use it together with");
-            Console.WriteLine("                    'npm run watch' in ChargingStation/Frontend");
-            Console.WriteLine();
-            Console.WriteLine("Display:");
-            Console.WriteLine($"  --kiosk-port <n>  the TCP port of the display, the page for the screen on the front");
-            Console.WriteLine($"                    of the station (default: {ChargingStation.DefaultKioskPort}). Its own server on its own");
-            Console.WriteLine("                    port, so that it and the web interface can be bound to");
-            Console.WriteLine("                    different addresses. There is no sign-in on it.");
-            Console.WriteLine("  --no-kiosk        do not listen for the display at all.");
-            Console.WriteLine();
-            Console.WriteLine("Web login:");
-            Console.WriteLine($"  --web-login <file>  where the web login lives (default: {WebLoginFile.DefaultFileName} below the");
-            Console.WriteLine("                      repository root). Without it a password is made up at the");
-            Console.WriteLine($"                      first start for the user '{WebLoginSettings.DefaultUsername}' and shown once.");
-            Console.WriteLine();
-            Console.WriteLine("Configuration:");
-            Console.WriteLine($"  --config <file>   where the name servers, the time server, the EVSEs, the power");
-            Console.WriteLine($"                    limits and the calibration certificates of this station live");
-            Console.WriteLine($"                    (default: {StationConfigFile.DefaultFileName} below the repository");
-            Console.WriteLine("                    root). Without the file the station has one 22 kW type 2 socket");
-            Console.WriteLine("                    and the system defaults; the Configuration pages of the web");
-            Console.WriteLine("                    interface write it, and every change there takes effect at once.");
-            Console.WriteLine();
-            Console.WriteLine("The wire below the charging cable (ISO 15118), off unless asked for:");
-            Console.WriteLine("  --v2g             bring up the V2G endpoint, SDP and SLAC");
-            Console.WriteLine("  --v2g-interface <name>");
-            Console.WriteLine("                    the interface the vehicle is on, i.e. the powerline modem;");
-            Console.WriteLine("                    without one the first candidate with an IPv6 link-local");
-            Console.WriteLine("                    address is taken, and the console says which");
-            Console.WriteLine("  --v2g-port <n>    the TCP port of the V2G endpoint; without one the operating");
-            Console.WriteLine("                    system picks a free one, which is what SDP then advertises");
-            Console.WriteLine("  --v2g-cert <file> a PKCS#12 certificate for the V2G endpoint, so that it speaks");
-            Console.WriteLine("                    TLS 1.3 as ISO 15118-20 requires; the password is read from");
-            Console.WriteLine($"                    the environment variable {V2GCertificatePasswordVariable}.");
-            Console.WriteLine("                    Without a certificate the endpoint speaks plain TCP and SDP");
-            Console.WriteLine("                    says so, rather than sending vehicles into a handshake that");
-            Console.WriteLine("                    cannot finish");
-            Console.WriteLine("  --slac-udp <ip:port>");
-            Console.WriteLine("                    run SLAC over a simulated medium instead of a powerline modem,");
-            Console.WriteLine("                    e.g. 127.0.0.1:0 for a bench. Without this, SLAC needs");
-            Console.WriteLine("                    AF_PACKET and therefore Linux, and says so where it cannot");
-            Console.WriteLine($"  --evse-id <id>    what SLAC hands a vehicle (default: {V2GOptions.DefaultEVSEId})");
-            Console.WriteLine();
-            Console.WriteLine("Log:");
-            Console.WriteLine("  -v, --verbose     write every entry to the console, down to the debug ones");
-            Console.WriteLine("  -q, --quiet       write only warnings and worse");
-            Console.WriteLine("      --no-trace    do not pick up what the libraries below write with DebugX");
-            Console.WriteLine();
-            Console.WriteLine("Whatever the console shows, the web interface shows the whole log under 'Logs'.");
-        }
-
-        #endregion
 
     }
 
