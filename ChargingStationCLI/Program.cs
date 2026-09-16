@@ -174,6 +174,30 @@ namespace cloud.charging.open.ChargingStation
         public const String V2GCertificatePasswordVariable = "CHARGINGSTATION_V2G_CERT_PASSWORD";
 
 
+        #region (private static) WhatToDoAbout(Problem)
+
+        /// <summary>
+        /// The way past a port that cannot be had, in the words of whoever
+        /// started this station.
+        /// </summary>
+        /// <remarks>
+        /// Here and not in the station, because the switches are this
+        /// program's vocabulary: the station knows which port it wanted and
+        /// what the socket layer said, and nothing about how it was started.
+        /// </remarks>
+        private static String WhatToDoAbout(PortUnavailableException Problem)
+
+            => Problem.Whose == StationPort.Display
+
+                   ? "Stop whatever has it, or give the display another port with --kiosk-port <number> - " +
+                     "or leave the display off altogether with --no-kiosk."
+
+                   : "Another copy of this station already running is the usual answer. Stop it, " +
+                     "or give this one another port with --port <number>.";
+
+        #endregion
+
+
         public static async Task<Int32> Main(String[] Arguments)
         {
 
@@ -484,7 +508,27 @@ namespace cloud.charging.open.ChargingStation
             await using (station)
             {
 
-                await station.Start();
+                try
+                {
+                    await station.Start();
+                }
+                catch (PortUnavailableException problem)
+                {
+
+                    // What somebody starting a second copy of this station used
+                    // to get was thirteen frames of stack trace under the
+                    // operating system's own words for a port in use - in
+                    // German on a German Windows, under eleven lines of English
+                    // log, with the port named nowhere.
+                    Console.Error.WriteLine($"The charging station could not start: {problem.Message}.");
+                    Console.Error.WriteLine(WhatToDoAbout(problem));
+
+                    if (verbose)
+                        Console.Error.WriteLine(problem);
+
+                    return 1;
+
+                }
 
                 #region What somebody who just started this needs to know
 
