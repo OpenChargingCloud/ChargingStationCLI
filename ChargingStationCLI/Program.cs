@@ -137,6 +137,11 @@ namespace cloud.charging.open.ChargingStation
             Console.WriteLine("                    interface write it, and every change there takes effect at once.");
             Console.WriteLine();
             Console.WriteLine("The wire below the charging cable (ISO 15118), off unless asked for:");
+            Console.WriteLine("  Everything here except the certificate and the simulated SLAC medium can");
+            Console.WriteLine("  also be written in the \"v2g\" section of the configuration file, and changed");
+            Console.WriteLine("  on the V2G page of the web interface while the station runs. The file has");
+            Console.WriteLine("  the last word on whatever it mentions.");
+            Console.WriteLine();
             Console.WriteLine("  --v2g             bring up the V2G endpoint, SDP and SLAC");
             Console.WriteLine("  --v2g-interface <name>");
             Console.WriteLine("                    the interface the vehicle is on, i.e. the powerline modem;");
@@ -547,6 +552,12 @@ namespace cloud.charging.open.ChargingStation
                     Console.WriteLine($"  calibration    {String.Join(", ", station.CalibrationCertificates.Select(certificate => certificate.Id))}");
                 Console.WriteLine($"  name servers   {(station.DNSEnabled ? String.Join(", ", station.DNSClient.DNSServers) : "switched off")}");
                 Console.WriteLine($"  time server    {station.NTSClient.Hostname}{(station.NTSEnabled ? "" : " (switched off)")}");
+
+                // Said even when there is nothing to say, because "the V2G
+                // lines are missing" and "V2G is off" look identical on a
+                // console and only one of them is a thing somebody configured.
+                if (station.V2G is null)
+                    Console.WriteLine($"  V2G            {(station.V2GOptions.Enabled ? "switched on, but nothing came up - see the log" : "switched off")}");
 
                 if (station.V2G is { } link)
                 {
