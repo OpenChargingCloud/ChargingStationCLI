@@ -104,7 +104,7 @@ namespace cloud.charging.open.ChargingStation
         private static void PrintUsage()
         {
             Console.WriteLine("Usage: ChargingStationCLI [--port <number>] [--any] [--frontend <dist directory>]");
-            Console.WriteLine("                          [--web-login <file>] [--config <file>] [--verbose | --quiet]");
+            Console.WriteLine("                          [--accounts <dir>] [--config <file>] [--verbose | --quiet]");
             Console.WriteLine("                          [--no-trace]");
             Console.WriteLine("                          [--v2g [--v2g-interface <name>] [--v2g-port <n>] [--v2g-cert <file>]");
             Console.WriteLine("                                 [--v2g-loopback] [--slac-udp <ip:port>] [--evse-id <id>]]");
@@ -123,10 +123,10 @@ namespace cloud.charging.open.ChargingStation
             Console.WriteLine("                    different addresses. There is no sign-in on it.");
             Console.WriteLine("  --no-kiosk        do not listen for the display at all.");
             Console.WriteLine();
-            Console.WriteLine("Web login:");
-            Console.WriteLine($"  --web-login <file>  where the web login lives (default: {WebLoginFile.DefaultFileName} below the");
+            Console.WriteLine("Accounts:");
+            Console.WriteLine($"  --accounts <dir>    where the accounts live (default: {ChargingStation.DefaultAccountsPath}/ below the");
             Console.WriteLine("                      repository root). Without it a password is made up at the");
-            Console.WriteLine($"                      first start for the user '{WebLoginSettings.DefaultUsername}' and shown once.");
+            Console.WriteLine($"                      first start for the user '{ChargingStation.DefaultAdminUser}' and shown once.");
             Console.WriteLine();
             Console.WriteLine("Configuration:");
             Console.WriteLine($"  --config <file>   where the name servers, the time server, the EVSEs, the power");
@@ -218,7 +218,7 @@ namespace cloud.charging.open.ChargingStation
             IPPort?  port           = null;
             var      anyAddress     = false;
             String?  frontendDir    = null;
-            String?  loginFilePath  = null;
+            String?  accountsPath   = null;
             String?  configFilePath = null;
             var      verbose        = false;
             var      quiet          = false;
@@ -282,10 +282,10 @@ namespace cloud.charging.open.ChargingStation
                         }
                         break;
 
-                    case "--web-login":
-                        if (!TryTakeValue(Arguments, ref i, out loginFilePath))
+                    case "--accounts":
+                        if (!TryTakeValue(Arguments, ref i, out accountsPath))
                         {
-                            Console.Error.WriteLine("Missing file after --web-login!");
+                            Console.Error.WriteLine("Missing directory after --accounts!");
                             return 2;
                         }
                         break;
@@ -488,9 +488,7 @@ namespace cloud.charging.open.ChargingStation
                               KioskPort:        kioskPort,
                               NoKiosk:          noKiosk,
 
-                              LoginFile:        new WebLoginFile(
-                                                    loginFilePath ?? Path.Combine(RepositoryRoot(), WebLoginFile.DefaultFileName)
-                                                ),
+                              AccountsPath:     accountsPath ?? Path.Combine(RepositoryRoot(), ChargingStation.DefaultAccountsPath),
 
                               ConfigFile:       new StationConfigFile(
                                                     configFilePath ?? Path.Combine(RepositoryRoot(), StationConfigFile.DefaultFileName)
@@ -555,7 +553,8 @@ namespace cloud.charging.open.ChargingStation
                 Console.WriteLine($"  JSON API       {station.WebInterfaceURL}api/v1/status");
                 Console.WriteLine($"  event stream   {station.WebInterfaceURL}api/v1/events");
                 Console.WriteLine($"  frontend from  {station.Frontend.Description}");
-                Console.WriteLine($"  web login      user '{station.Sessions.Username}', {station.LoginFile.Path}");
+                Console.WriteLine($"  accounts       {station.ExtAPI.Users.Count()} user(s) in {station.AccountsPath}");
+                Console.WriteLine($"  sign in at     {station.WebInterfaceURL}{ChargingStation.ExtAPIPath.ToString().Trim('/')}/login");
                 Console.WriteLine($"  configuration  {station.ConfigFile.Path}");
                 Console.WriteLine($"  EVSEs          {station.EVSEs.Count}: {String.Join(", ", station.EVSEs.Select(evse => evse.ToString()))}");
                 Console.WriteLine($"  grid           {(station.UplinkPowerLimit_kW.HasValue ? $"up to {station.UplinkPowerLimit_kW.Value} kW" : "no limit configured")}");
@@ -582,8 +581,8 @@ namespace cloud.charging.open.ChargingStation
                 if (station.GeneratedPassword is not null)
                 {
                     Console.WriteLine();
-                    Console.WriteLine("  ┌─ First start: there was no web login, so one was made up for you ─────────");
-                    Console.WriteLine($"  │  user      {station.Sessions.Username}");
+                    Console.WriteLine("  ┌─ First start: there were no accounts, so one was made up for you ─────────");
+                    Console.WriteLine($"  │  user      {ChargingStation.DefaultAdminUser}");
                     Console.WriteLine($"  │  password  {station.GeneratedPassword}");
                     Console.WriteLine("  │  It is shown here once and kept only as a hash. Write it down.");
                     Console.WriteLine("  └───────────────────────────────────────────────────────────────────────────");
