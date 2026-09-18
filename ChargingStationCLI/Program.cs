@@ -107,7 +107,7 @@ namespace cloud.charging.open.ChargingStation
             Console.WriteLine("                          [--web-login <file>] [--config <file>] [--verbose | --quiet]");
             Console.WriteLine("                          [--no-trace]");
             Console.WriteLine("                          [--v2g [--v2g-interface <name>] [--v2g-port <n>] [--v2g-cert <file>]");
-            Console.WriteLine("                                 [--slac-udp <ip:port>] [--evse-id <id>]]");
+            Console.WriteLine("                                 [--v2g-loopback] [--slac-udp <ip:port>] [--evse-id <id>]]");
             Console.WriteLine();
             Console.WriteLine("Web interface:");
             Console.WriteLine($"  --port <number>   TCP port to listen on (default: {ChargingStation.DefaultHTTPPort})");
@@ -155,6 +155,11 @@ namespace cloud.charging.open.ChargingStation
             Console.WriteLine("                    Without a certificate the endpoint speaks plain TCP and SDP");
             Console.WriteLine("                    says so, rather than sending vehicles into a handshake that");
             Console.WriteLine("                    cannot finish");
+            Console.WriteLine("  --v2g-loopback    also answer SDP requests coming from this same machine, for a");
+            Console.WriteLine("                    bench where the vehicle runs here too. Off in the field: a");
+            Console.WriteLine("                    station has no business answering a simulator somebody left");
+            Console.WriteLine("                    running on its own controller. Set it on the vehicle as well -");
+            Console.WriteLine("                    which of the two sockets decides depends on the platform");
             Console.WriteLine("  --slac-udp <ip:port>");
             Console.WriteLine("                    run SLAC over a simulated medium instead of a powerline modem,");
             Console.WriteLine("                    e.g. 127.0.0.1:0 for a bench. Without this, SLAC needs");
@@ -223,6 +228,7 @@ namespace cloud.charging.open.ChargingStation
             var      noKiosk        = false;
 
             var      v2g            = false;
+            var      v2gLoopback    = false;
             String?  v2gInterface   = null;
             UInt16   v2gPort        = 0;
             String?  v2gCertFile    = null;
@@ -341,6 +347,11 @@ namespace cloud.charging.open.ChargingStation
                         v2g = true;
                         break;
 
+                    case "--v2g-loopback":
+                        v2gLoopback = true;
+                        v2g         = true;
+                        break;
+
                     case "--slac-udp":
                         if (!TryTakeValue(Arguments, ref i, out slacUDP))
                         {
@@ -442,6 +453,7 @@ namespace cloud.charging.open.ChargingStation
                                  InterfaceName      = v2gInterface,
                                  V2GPort            = v2gPort,
                                  ServerCertificate  = v2gCertificate,
+                                 MulticastLoopback  = v2gLoopback,
                                  EVSEId             = evseId,
                                  SlacTransport      = slacEndpoint is not null
                                                           ? SlacTransportKind.UDP
