@@ -606,7 +606,13 @@ namespace cloud.charging.open.ChargingStation
                     Console.WriteLine("  ┌─ First start: there were no accounts, so one was made up for you ─────────");
                     Console.WriteLine($"  │  user      {ChargingStation.DefaultAdminUser}");
                     Console.WriteLine($"  │  password  {station.GeneratedPassword}");
-                    Console.WriteLine("  │  It is shown here once and kept only as a hash. Write it down.");
+                    // Named rather than called "a hash", and read from the
+                    // implementation rather than typed here, so the box cannot
+                    // end up describing a scheme this station no longer uses.
+                    // "i=600000" is also how passwords.db writes it down, which
+                    // is where somebody checking this will look.
+                    Console.WriteLine($"  │  It is shown here once and kept only as a {SecurePassword.PBKDF2SHA256} hash");
+                    Console.WriteLine($"  │  over {SecurePassword.DefaultIterations} iterations. Write it down.");
                     Console.WriteLine("  └───────────────────────────────────────────────────────────────────────────");
                 }
 
