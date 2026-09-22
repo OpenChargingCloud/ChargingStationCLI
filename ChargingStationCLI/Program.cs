@@ -129,7 +129,7 @@ namespace cloud.charging.open.ChargingStation
             Console.WriteLine($"                      first start for the user '{ChargingStation.DefaultAdminUser}' and shown once.");
             Console.WriteLine();
             Console.WriteLine("Configuration:");
-            Console.WriteLine($"  --config <file>   where the name servers, the time server, the EVSEs, the power");
+            Console.WriteLine($"  --config <file>   where the name servers, the time servers, the EVSEs, the power");
             Console.WriteLine($"                    limits and the calibration certificates of this station live");
             Console.WriteLine($"                    (default: {StationConfigFile.DefaultFileName} below the repository");
             Console.WriteLine("                    root). Without the file the station has one 22 kW type 2 socket");
@@ -587,7 +587,31 @@ namespace cloud.charging.open.ChargingStation
                 if (station.CalibrationCertificates.Count > 0)
                     Console.WriteLine($"  calibration    {String.Join(", ", station.CalibrationCertificates.Select(certificate => certificate.Id))}");
                 Console.WriteLine($"  name servers   {(station.DNSEnabled ? String.Join(", ", station.DNSClient.DNSServers) : "switched off")}");
-                Console.WriteLine($"  time server    {station.NTSClient.Hostname}{(station.NTSEnabled ? "" : " (switched off)")}");
+                #region The time servers
+
+                var bands = station.TimeSources.Bands();
+                var asked = bands.SelectMany(band => band).ToArray();
+
+                if (asked.Length <= 1)
+                    Console.WriteLine($"  time server    {station.NTSClient.Hostname}{(station.NTSEnabled ? "" : " (switched off)")}");
+
+                else
+                {
+
+                    // One line per band, because a band is the unit that is
+                    // asked at once - putting two bands on one line would read
+                    // as six equal servers when it is two and then four.
+                    for (var i = 0; i < bands.Count; i++)
+                        Console.WriteLine((i == 0 ? "  time servers   " : "                 ") +
+                                          String.Join(", ", bands[i].Select(source => source.Hostname.ToString())) +
+                                          (bands.Count > 1 ? $"   (priority {bands[i][0].Priority})" : ""));
+
+                    Console.WriteLine($"                 at least {station.TimeSources.MinServers} of them must answer" +
+                                      (station.NTSEnabled ? "" : " - and NTS is switched off"));
+
+                }
+
+                #endregion
 
                 // Said even when there is nothing to say, because "the V2G
                 // lines are missing" and "V2G is off" look identical on a
