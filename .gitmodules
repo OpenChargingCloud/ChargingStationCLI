@@ -25,3 +25,6 @@
 [submodule "libs/ChargingStation"]
 	path = libs/ChargingStation
 	url = https://github.com/OpenChargingCloud/ChargingStation.git
+[submodule "libs/ChargyCore.NET"]
+	path = libs/ChargyCore.NET
+	url = https://github.com/OpenChargingCloud/ChargyCore.NET.git
