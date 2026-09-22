@@ -30,7 +30,7 @@ The following linux script will set up a Linux KVM virtual machine with two netw
 The install image will be **Debian GNU/Linux** booted from a minimal CD image. When you install Debian it is needed to set the `bootindex` correctly (1 vs. 2 qcow2 image vs. 2 vs. 1 for the virtual CD drive). It is also
 recommended to disable the second network interface within the script while installing.
 
-You can access the VM via `telnet 127.0.0.1 4101`, or via `vncviewer 127.0.0.1::6001`.    
+You can access the VM via `telnet 127.0.0.1 4120`, or via `vncviewer 127.0.0.1::6020`.    
 During Debian GNU/Linux installation is is recommended to use *vnc*.
 
 The VNC display, the serial port and both MAC addresses differ from the ones
@@ -45,10 +45,10 @@ NAME=cs
 BASE=/home/KVMGuests/${NAME}
 
 # pro VM eindeutig halten
-VNC_DISPLAY=101          # 127.0.0.1:5900+DISPLAY
-SERIAL_PORT=4101
-MAC0=00:23:05:42:02:00
-MAC1=00:23:05:42:02:01
+VNC_DISPLAY=120          # 127.0.0.1:5900+DISPLAY
+SERIAL_PORT=4120
+MAC0=00:23:05:42:01:20
+MAC1=00:23:05:42:01:21
 
 qemu-system-x86_64 \
   -enable-kvm \
@@ -90,7 +90,7 @@ qemu-system-x86_64 \
 1. Installing Debian GNU/Linux 13.7.0: https://www.debian.org/CD/netinst/ for AMD64.
 2. Boot the virtual machine
 3. Deselect everything except `Standard Tools`, select `SSH server`
-4. `vncviewer 127.0.0.1::6001`
+4. `vncviewer 127.0.0.1::6020`
 5. `apt install joe mc sudo net-tools git`
 6. `joe /etc/sudoers` add: `ahzf    ALL=(ALL:ALL) NOPASSWD: ALL`, or which user you prefer :)
 7. https://learn.microsoft.com/en-us/dotnet/core/install/linux-debian?tabs=dotnet10
