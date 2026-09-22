@@ -145,8 +145,11 @@ namespace cloud.charging.open.ChargingStation
             Console.WriteLine("  --v2g             bring up the V2G endpoint, SDP and SLAC");
             Console.WriteLine("  --v2g-interface <name>");
             Console.WriteLine("                    the interface the vehicle is on, i.e. the powerline modem;");
-            Console.WriteLine("                    without one the first candidate with an IPv6 link-local");
-            Console.WriteLine("                    address is taken, and the console says which");
+            Console.WriteLine("                    without one the candidate that carries no IPv4 address is");
+            Console.WriteLine("                    taken. Nothing in ISO 15118 is IPv4, while the interface a");
+            Console.WriteLine("                    machine is administered over practically always has one, so");
+            Console.WriteLine("                    that is very probably the port with the vehicle behind it.");
+            Console.WriteLine("                    The console says which it took and why");
             Console.WriteLine("  --v2g-port <n>    the TCP port of the V2G endpoint; without one the operating");
             Console.WriteLine("                    system picks a free one, which is what SDP then advertises");
             Console.WriteLine("  --v2g-cert <file> a PKCS#12 certificate for the V2G endpoint, so that it speaks");
@@ -594,9 +597,15 @@ namespace cloud.charging.open.ChargingStation
 
                 if (station.V2G is { } link)
                 {
+                    // Which interface, and what made it that one, on a line of
+                    // its own rather than in a parenthesis behind SDP: on a
+                    // machine with two of them this is the first thing somebody
+                    // checks, and the reason is the half that saves the
+                    // afternoon.
+                    Console.WriteLine($"  V2G interface  {link.InterfaceChoice ?? "none"}");
                     Console.WriteLine($"  V2G endpoint   {link.V2GEndpoint?.ToString() ?? "not listening"}" +
                                       (link.V2GEndpoint is not null ? link.UsesTLS ? ", TLS 1.3" : ", plain TCP" : ""));
-                    Console.WriteLine($"  SDP            {(link.SDPRunning  ? $"answering on '{link.Interface?.Name}'" : "not running")}");
+                    Console.WriteLine($"  SDP            {(link.SDPRunning  ? "answering" : "not running")}");
                     Console.WriteLine($"  SLAC           {(link.SLACRunning ? "listening" : "not running")}");
                 }
 
