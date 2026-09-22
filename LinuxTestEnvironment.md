@@ -97,20 +97,27 @@ qemu-system-x86_64 \
 8. `apt install -y curl ca-certificates unzip gnupg`
 9. `curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -`
 10. `sudo apt install -y nodejs`
-11. `sudo npm install -g typescript`
 
-Node.js is not enough on its own. Seven of the OCPP v2.1 projects run a bare
-`tsc` in a PreBuild target, so a machine without a *global* TypeScript
-compiler stops the build with
+Node.js is needed for more than the station's own web interface. Seven
+projects in the OCPP and WWCP_Core repositories compile TypeScript into their
+HTTPRoot as part of the build, and the first build fetches the compiler for
+them with `npm ci` - so the first build needs the network, and every one
+after it does not.
+
+Nothing has to be installed globally for that. It used to: those projects ran
+a bare `tsc`, and a machine that had followed every step above still stopped
+with
 
 ```
 error MSB3073: The command "tsc" exited with code 127.
 ```
 
 which is the shell saying "no such command" rather than anything about the
-code. The station's own web interface does not need it - that one is built by
-npm out of `Frontend/`, with its compiler in `node_modules` - but the
-solution builds those projects too.
+code. The compiler is pinned in each repository's package.json now, so every
+machine compiles with the same version - which also settles a quieter fault,
+where whichever version a machine happened to have would rewrite .js files
+that are checked in and leave the tree dirty after a build that changed
+nothing.
 
 
 ## Linux Virtual Bridges
