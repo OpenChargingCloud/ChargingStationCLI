@@ -1,11 +1,17 @@
 #!/bin/bash
+#
+# Start the charging station with whatever was passed here, e.g.
+#
+#   ./run.sh --any --port 2347
+#
+# --help lists the switches.
+#
+# Nothing is collected here any more: every assembly carries the commit it was
+# built from and the banner prints them. That is also what makes --no-build
+# safe now - a stale binary says so itself, instead of being described by
+# hashes read from a working tree it was never built from.
 
-cd libs
-cd UsersAPI;             versionHash_UsersAPI=$(git rev-list --max-count=1 HEAD);                cd ..
-cd OpenChargingCloudAPI; versionHash_OpenChargingCloudAPI=$(git rev-list --max-count=1 HEAD);    cd ..
-#cd ChargeITMobilityAPI;  versionHash_ChargeITMobilityAPI=$(git rev-list --max-count=1 HEAD);     cd ..
-#cd ChargeITMobilityAPI;  versionHash_ChargeITMobilityEMPAPI=$(git rev-list --max-count=1 HEAD);  cd ..
-cd ..
+set -e
+cd "$(dirname "$0")"
 
-cd OCPPTests
-dotnet run --no-build --no-restore $versionHash_UsersAPI $versionHash_OpenChargingCloudAPI
+dotnet run --no-build --no-restore --project ChargingStationCLI -- "$@"
