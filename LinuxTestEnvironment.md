@@ -97,6 +97,20 @@ qemu-system-x86_64 \
 8. `apt install -y curl ca-certificates unzip gnupg`
 9. `curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -`
 10. `sudo apt install -y nodejs`
+11. `sudo npm install -g typescript`
+
+Node.js is not enough on its own. Seven of the OCPP v2.1 projects run a bare
+`tsc` in a PreBuild target, so a machine without a *global* TypeScript
+compiler stops the build with
+
+```
+error MSB3073: The command "tsc" exited with code 127.
+```
+
+which is the shell saying "no such command" rather than anything about the
+code. The station's own web interface does not need it - that one is built by
+npm out of `Frontend/`, with its compiler in `node_modules` - but the
+solution builds those projects too.
 
 
 ## Linux Virtual Bridges
