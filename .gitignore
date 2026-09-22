@@ -270,3 +270,16 @@ __pycache__/
 # server and its EVSEs. A property of this particular installation, not of the
 # source.
 configuration.json
+
+# The sign-in this station was given before it had an accounts directory: one
+# user and a PBKDF2 hash of their password, in a file nothing reads any more.
+# Ignored rather than deleted - it is somebody's credential, and throwing away
+# a password hash is not a thing to do as housekeeping.
+#
+# It also has to be ignored now that the build stamp calls a tree dirty when
+# git reports anything at all, untracked files included, because an SDK
+# project compiles every .cs in its directory and a source file never added to
+# git is in the build while a tracked-only check still calls the tree clean.
+# One leftover file would otherwise mark every build dirty, and a marker
+# nobody believes is worse than no marker.
+web-login.json
