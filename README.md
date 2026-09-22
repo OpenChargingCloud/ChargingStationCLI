@@ -39,6 +39,21 @@ interface is built by npm and embedded into the assembly, so the station is
 one thing to deploy.
 
 
+### The wire below the charging cable
+
+`--v2g` brings up the V2G endpoint, SDP and SLAC. On one machine that is
+everything for the message exchange and nothing at all for the wire: SDP
+discovery, link-local addressing and the interface the powerline modem sits on
+only mean something between two machines sharing one Ethernet segment, and
+SLAC needs `AF_PACKET` and therefore Linux.
+
+[LinuxTestEnvironment.md](LinuxTestEnvironment.md) sets that up - KVM guests on
+a Linux host, a bridge for management and a second, IPv6-only bridge standing
+in for the charging cable. The vehicle on the other end of it is
+[EVCLI](https://github.com/OpenChargingCloud/EVCLI), which carries the mirror
+image of that document.
+
+
 ### Your participation
 
 This software is Open Source under the **Affero GPL 3.0 license**.
