@@ -2,8 +2,16 @@
 #
 # Pull everything and build it.
 #
-# The ISO 15118 schemas are not in any of these repositories and are not
-# fetched here either - that is a licence you accept yourself, once:
+# Two things are not fetched here and are done once, by hand, in a fresh
+# clone. The OCPP charge point and charging station projects keep their
+# stylesheets as SCSS and their compiled CSS out of git, so those have to be
+# generated before anything referencing them compiles - it needs sass and jq on
+# the PATH:
+#
+#   for f in libs/WWCP_OCPP/*/compileSASS.sh; do bash "$f"; done
+#
+# And the ISO 15118 schemas are in none of these repositories, because that is
+# a licence you accept yourself:
 #
 #   bash libs/WWCP_ISO15118/tools/download-schemas.sh
 
