@@ -1,5 +1,8 @@
 # Charging Station
 
+[![CI](https://github.com/OpenChargingCloud/ChargingStationCLI/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenChargingCloud/ChargingStationCLI/actions/workflows/ci.yml)
+[![Nightly](https://github.com/OpenChargingCloud/ChargingStationCLI/actions/workflows/nightly.yml/badge.svg)](https://github.com/OpenChargingCloud/ChargingStationCLI/actions/workflows/nightly.yml)
+
 This software implementes a EV Charging Station.
 
 
