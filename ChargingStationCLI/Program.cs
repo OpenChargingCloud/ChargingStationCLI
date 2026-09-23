@@ -777,12 +777,14 @@ namespace cloud.charging.open.ChargingStation
                             break;
 
                         // A command line that broke is not somebody asking for
-                        // the station to stop. One thing that breaks it is a
-                        // line typed wider than the window, which throws out of
-                        // the line editor in Styx - measured in 80 columns:
-                        // "Parameter 'left', actual value was 80". The vehicle
-                        // takes that as the end and shuts down, with exit code
-                        // 0; measured too.
+                        // the station to stop. What broke it first was a line
+                        // typed wider than the window: until Styx learned to
+                        // show such a line through a window onto it, it threw
+                        // out of the line editor - measured in 80 columns,
+                        // "Parameter 'left', actual value was 80" - and a
+                        // program that took that for 'quit' shut down with
+                        // exit code 0. That cause is gone; this is for the
+                        // next one.
                         //
                         // The console goes back to the log first, with a lock
                         // of its own, because the command line's way of writing
