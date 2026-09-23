@@ -146,6 +146,7 @@ jobs:
               --port      18126 \
               --accounts  "$tmp/accounts" \
               --config    "$tmp/configuration.json" \
+              --log-file  "$tmp/logs" \
               --no-kiosk \
               > "$tmp/console.log" 2>&1 &
           pid=$!

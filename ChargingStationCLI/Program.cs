@@ -107,7 +107,7 @@ namespace cloud.charging.open.ChargingStation
         {
             Console.WriteLine("Usage: ChargingStationCLI [--port <number>] [--any] [--frontend <dist directory>]");
             Console.WriteLine("                          [--accounts <dir>] [--config <file>] [--verbose | --quiet]");
-            Console.WriteLine("                          [--no-trace]");
+            Console.WriteLine("                          [--no-trace] [--log-file <dir>] [--no-log-file]");
             Console.WriteLine("                          [--v2g [--v2g-interface <name>] [--v2g-port <n>] [--v2g-cert <file>]");
             Console.WriteLine("                                 [--v2g-loopback] [--slac-udp <ip:port>] [--evse-id <id>]]");
             Console.WriteLine();
@@ -182,6 +182,13 @@ namespace cloud.charging.open.ChargingStation
             Console.WriteLine();
             Console.WriteLine("Whatever the console shows, the web interface shows the whole log under 'Logs'.");
             Console.WriteLine();
+            Console.WriteLine($"  --log-file <dir>  where the log files go (default: {ChargingStation.DefaultLogPath}/ below the repository");
+            Console.WriteLine("                    root): one file per UTC day, every entry down to the debug");
+            Console.WriteLine("                    ones, and nothing is ever deleted.");
+            Console.WriteLine("      --no-log-file do not write one. Then what the console did not show, and");
+            Console.WriteLine($"                    what falls out of the web interface's last {EventLog.DefaultCapacity} entries, is");
+            Console.WriteLine("                    gone.");
+            Console.WriteLine();
             Console.WriteLine("Once it is up, the console is a prompt: 'help' lists what can be typed there,");
             Console.WriteLine("Tab completes it, and 'quit' or Ctrl+C stops the station. Started where there is");
             Console.WriteLine("no terminal - from a script, under a service manager, in CI, or with the output");
@@ -233,6 +240,8 @@ namespace cloud.charging.open.ChargingStation
             var      anyAddress     = false;
             String?  frontendDir    = null;
             String?  accountsPath   = null;
+            String?  logPath        = null;
+            var      noLogFile      = false;
             String?  configFilePath = null;
             var      verbose        = false;
             var      quiet          = false;
@@ -308,6 +317,18 @@ namespace cloud.charging.open.ChargingStation
                             Console.Error.WriteLine("Missing directory after --accounts!");
                             return 2;
                         }
+                        break;
+
+                    case "--log-file":
+                        if (!TryTakeValue(Arguments, ref i, out logPath))
+                        {
+                            Console.Error.WriteLine("Missing directory after --log-file!");
+                            return 2;
+                        }
+                        break;
+
+                    case "--no-log-file":
+                        noLogFile = true;
                         break;
 
                     case "--config":
@@ -522,6 +543,15 @@ namespace cloud.charging.open.ChargingStation
                                                     : quiet ? LogLevel.Warning
                                                     : LogLevel.Info,
 
+                              // On unless it is switched off. A console nobody
+                              // was watching kept nothing, and the log a
+                              // browser shows goes with the process - so the
+                              // one place a question about last night can still
+                              // be answered from is a file.
+                              LogPath:          noLogFile
+                                                    ? null
+                                                    : logPath ?? Path.Combine(RepositoryRoot(), ChargingStation.DefaultLogPath),
+
                               BridgeDebugLog:   !noTrace
 
                           );
@@ -607,6 +637,7 @@ namespace cloud.charging.open.ChargingStation
                 Console.WriteLine($"  accounts       {station.ExtAPI.Users.Count()} user(s) in {station.AccountsPath}");
                 Console.WriteLine($"  sign in at     {station.WebInterfaceURL}{ChargingStation.ExtAPIPath.ToString().Trim('/')}/login");
                 Console.WriteLine($"  configuration  {station.ConfigFile.Path}");
+                Console.WriteLine($"  log files      {station.LogPath ?? "none (--no-log-file)"}");
                 Console.WriteLine($"  EVSEs          {station.EVSEs.Count}: {String.Join(", ", station.EVSEs.Select(evse => evse.ToString()))}");
                 Console.WriteLine($"  grid           {(station.UplinkPowerLimit_kW.HasValue ? $"up to {station.UplinkPowerLimit_kW.Value} kW" : "no limit configured")}");
 

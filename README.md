@@ -73,6 +73,23 @@ with the output going into a file or through `| tee` — there is no prompt, and
 the station runs until it is stopped, exactly as it did before.
 
 
+### The log
+
+Everything that happens is written three times over, because the three answer
+different questions. The **console** shows what is going on to whoever is
+watching, at the level `--verbose` and `--quiet` choose. The **Logs** page
+keeps the last two thousand entries for whoever asks, and loses them when the
+process ends. And `logs/` beside the solution keeps one file per day, every
+entry down to the debug ones, for the afternoon somebody asks what happened
+last night — `--log-file <dir>` puts it elsewhere, `--no-log-file` leaves it
+out, and nothing in it is ever deleted.
+
+The days are UTC days, as the timestamps in the files are. A file that cannot
+be written is said once on the console rather than once per entry, every entry
+after that is tried again, and the first one that makes it is preceded by a
+line saying how many are missing.
+
+
 ### The wire below the charging cable
 
 `--v2g` brings up the V2G endpoint, SDP and SLAC. On one machine that is

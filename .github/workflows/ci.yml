@@ -182,11 +182,11 @@ jobs:
       # to be inside the assembly rather than merely to have been built.
       #
       # Everything it writes goes to a temporary directory: a first start makes
-      # an account store and a configuration file, and none of that belongs in
-      # a workspace whose cleanliness the build stamps into every assembly it
-      # produces. --no-kiosk, because the display has a server and a port of
-      # its own and no sign-in to ask about. V2G stays off, as it is unless
-      # asked for: SLAC needs a powerline modem.
+      # an account store, a configuration file and a log file, and none of that
+      # belongs in a workspace whose cleanliness the build stamps into every
+      # assembly it produces. --no-kiosk, because the display has a server and
+      # a port of its own and no sign-in to ask about. V2G stays off, as it is
+      # unless asked for: SLAC needs a powerline modem.
       #
       # Two questions are asked of it. "/" must come back as the embedded web
       # interface. "/api/v1/status" must come back 401, because the JSON API of
@@ -203,6 +203,7 @@ jobs:
               --port      18126 \
               --accounts  "$tmp/accounts" \
               --config    "$tmp/configuration.json" \
+              --log-file  "$tmp/logs" \
               --no-kiosk \
               > "$tmp/console.log" 2>&1 &
           pid=$!
