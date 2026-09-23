@@ -150,8 +150,12 @@ namespace cloud.charging.open.ChargingStation
             Console.WriteLine("                    machine is administered over practically always has one, so");
             Console.WriteLine("                    that is very probably the port with the vehicle behind it.");
             Console.WriteLine("                    The console says which it took and why");
-            Console.WriteLine("  --v2g-port <n>    the TCP port of the V2G endpoint; without one the operating");
-            Console.WriteLine("                    system picks a free one, which is what SDP then advertises");
+            Console.WriteLine($"  --v2g-port <n>    the TCP port of the V2G endpoint (default: {V2GOptions.DefaultV2GPort}, which IANA");
+            Console.WriteLine("                    registers for v2g-secc). ISO 15118 does not require it - the");
+            Console.WriteLine("                    port travels in the SDP response, so a vehicle finds the");
+            Console.WriteLine("                    endpoint wherever it is. Pass 0 to let the operating system");
+            Console.WriteLine("                    pick a free one, which is what a machine running two");
+            Console.WriteLine("                    stations wants. Whichever it is, that is what SDP advertises");
             Console.WriteLine("  --v2g-cert <file> a PKCS#12 certificate for the V2G endpoint, so that it speaks");
             Console.WriteLine("                    TLS 1.3 as ISO 15118-20 requires; the password is read from");
             Console.WriteLine($"                    the environment variable {V2GCertificatePasswordVariable}.");
@@ -233,7 +237,13 @@ namespace cloud.charging.open.ChargingStation
             var      v2g            = false;
             var      v2gLoopback    = false;
             String?  v2gInterface   = null;
-            UInt16   v2gPort        = 0;
+            // The station's default rather than zero, because this is passed
+            // through unconditionally: leaving it at zero here would override
+            // V2GOptions.DefaultV2GPort and no station started from this
+            // command line would ever see it. "--v2g-port 0" still asks for
+            // any free one, which is now a thing somebody says rather than
+            // what they get by saying nothing.
+            UInt16   v2gPort        = V2GOptions.DefaultV2GPort;
             String?  v2gCertFile    = null;
             String?  slacUDP        = null;
             var      evseId         = V2GOptions.DefaultEVSEId;
