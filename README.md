@@ -42,6 +42,37 @@ interface is built by npm and embedded into the assembly, so the station is
 one thing to deploy.
 
 
+### Typing at it
+
+Once it is up, the console is a prompt rather than a place that only scrolls:
+
+```
+ChargingStation> syncNTS
+succeeded after 44 ms: 4 of 4 server(s) answered (2 required), offset +703.0 ms, spread 2.5 ms
+  ptbtime1.ptb.de  +702.9 ms, round trip 24.5 ms, key exchange reused
+  ptbtime2.ptb.de  +703.0 ms, round trip 23.6 ms, key exchange reused
+  ptbtime3.ptb.de  +701.0 ms, round trip 22.8 ms, key exchange reused
+  ptbtime4.ptb.de  +703.5 ms, round trip 29.7 ms, key exchange reused
+```
+
+`help` lists what can be typed, `quit` leaves, **Tab** completes and **↑**
+walks back through what was typed before. `syncNTS` is the first command, and
+it is **Sync now** on the **NTS** page, typed: the same group of time servers
+is asked, the same entries go into the log, and the same result is left behind
+for the page to show. The one entry that differs says who asked — the page
+names the account that pressed the button, the prompt says it was somebody at
+the command line. Neither of them steps the clock.
+
+The log keeps writing while you type, from whichever thread did the thing it is
+reporting, and your half-typed line survives it: the line is taken off the
+screen, the entry is written whole, and the line comes back with the cursor
+where it was.
+
+Where there is no terminal — from a script, under a service manager, in CI, or
+with the output going into a file or through `| tee` — there is no prompt, and
+the station runs until it is stopped, exactly as it did before.
+
+
 ### The wire below the charging cable
 
 `--v2g` brings up the V2G endpoint, SDP and SLAC. On one machine that is
