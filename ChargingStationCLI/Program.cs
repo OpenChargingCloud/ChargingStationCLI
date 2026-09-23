@@ -806,8 +806,15 @@ namespace cloud.charging.open.ChargingStation
 
                         brokeAtOnce = atOnce;
 
+                        // On one line, as every entry is: the message of an
+                        // exception may carry line breaks of its own - this
+                        // one does, before "Actual value was 80" - and in the
+                        // log file a second line has no time, no level and no
+                        // tags.
+                        var why = typing.Exception?.GetBaseException().Message.ReplaceLineEndings(" ");
+
                         station.Log.Warning(
-                            $"The command line stopped working: {typing.Exception?.GetBaseException().Message} " +
+                            $"The command line stopped working: {why} " +
                             (giveUp
                                  ? "A new one broke again as soon as it started, so there is none; the station keeps running, and Ctrl+C stops it."
                                  : "A new one is started."),
