@@ -649,8 +649,12 @@ namespace cloud.charging.open.ChargingStation
                 var bands = station.TimeSources.Bands();
                 var asked = bands.SelectMany(band => band).ToArray();
 
+                // The group's one server where it has one, and trimmed as the
+                // servers of a longer list are below: this used to be the host of
+                // the single client the detailed test starts from, with its root
+                // dot, which only showed with a group of one.
                 if (asked.Length <= 1)
-                    Console.WriteLine($"  time server    {station.NTSClient.Hostname}{(station.NTSEnabled ? "" : " (switched off)")}");
+                    Console.WriteLine($"  time server    {(asked.Length == 1 ? asked[0].Hostname : station.NTSClient.Hostname).Trimmed}{(station.NTSEnabled ? "" : " (switched off)")}");
 
                 else
                 {
@@ -719,13 +723,14 @@ namespace cloud.charging.open.ChargingStation
                 // simply runs, exactly as it did before there was a command
                 // line, and the web interface is how it is spoken to.
                 //
-                // The output counts too, which the vehicle does not ask about:
-                // the prompt is drawn by moving the cursor, and with the output
-                // going into "| tee" or a file there is no cursor to move.
-                // Measured on Windows with the vehicle's test, input only: the
-                // prompt throws while drawing itself, before a key is pressed,
-                // and the program was gone within 200 ms of its banner - with
-                // exit code 0, a program that said all was well.
+                // The output counts too: the prompt is drawn by moving the
+                // cursor, and with the output going into "| tee" or a file there
+                // is no cursor to move. Measured on Windows with the vehicle,
+                // whose prompt then looked at its input only: the prompt threw
+                // while drawing itself, before a key was pressed, and the
+                // program was gone within 200 ms of its banner - with exit code
+                // 0, a program that said all was well. The vehicle asks both
+                // now, as this does.
                 var canBeTypedAt = !Console.IsInputRedirected &&
                                    !Console.IsOutputRedirected;
 
