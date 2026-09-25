@@ -25,10 +25,12 @@ using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
 using cloud.charging.open.ChargingStation;
 using cloud.charging.open.ChargingStation.CommandLine;
-using cloud.charging.open.ChargingStation.Configuration;
 using cloud.charging.open.ChargingStation.ISO15118;
-using cloud.charging.open.ChargingStation.Logging;
 using cloud.charging.open.ChargingStation.Web;
+
+using cloud.charging.open.protocols.WWCP.Node;
+using cloud.charging.open.protocols.WWCP.Node.Configuration;
+using cloud.charging.open.protocols.WWCP.Node.Logging;
 
 #endregion
 
@@ -133,7 +135,7 @@ namespace cloud.charging.open.ChargingStation
             Console.WriteLine("Configuration:");
             Console.WriteLine($"  --config <file>   where the name servers, the time servers, the EVSEs, the power");
             Console.WriteLine($"                    limits and the calibration certificates of this station live");
-            Console.WriteLine($"                    (default: {StationConfigFile.DefaultFileName} below the repository");
+            Console.WriteLine($"                    (default: {WWCPConfigFile.DefaultFileName} below the repository");
             Console.WriteLine("                    root). Without the file the station has one 22 kW type 2 socket");
             Console.WriteLine("                    and the system defaults; the Configuration pages of the web");
             Console.WriteLine("                    interface write it, and every change there takes effect at once.");
@@ -218,7 +220,7 @@ namespace cloud.charging.open.ChargingStation
         /// </remarks>
         private static String WhatToDoAbout(PortUnavailableException Problem)
 
-            => Problem.Whose == StationPort.Display
+            => Problem.Whose == ChargingStation.DisplayPort
 
                    ? "Stop whatever has it, or give the display another port with --kiosk-port <number> - " +
                      "or leave the display off altogether with --no-kiosk."
@@ -531,8 +533,8 @@ namespace cloud.charging.open.ChargingStation
 
                               AccountsPath:     accountsPath ?? Path.Combine(RepositoryRoot(), ChargingStation.DefaultAccountsPath),
 
-                              ConfigFile:       new StationConfigFile(
-                                                    configFilePath ?? Path.Combine(RepositoryRoot(), StationConfigFile.DefaultFileName)
+                              ConfigFile:       new WWCPConfigFile(
+                                                    configFilePath ?? Path.Combine(RepositoryRoot(), WWCPConfigFile.DefaultFileName)
                                                 ),
 
                               Frontend:         frontend,
