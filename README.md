@@ -143,6 +143,25 @@ somebody else leaves that one file out. `--no-log-file` leaves this record out
 too.
 
 
+### The local app
+
+Besides the web interface on port 2348 and the display on 2349, the program
+opens a third server, for an app on a phone in the station's own network:
+`http://127.0.0.1:2350/`, with `POST /localStart`, `POST /localStop/{SessionId}`
+and the WebSocket `/localApp`. A card's UID starts a charge there as it would at
+a reader, and the answer carries the handle that stops it; nothing else is on
+that port, and there is no sign-in on it.
+
+`--local-app-any` puts it on every address, and only it: `--any` does not reach
+it, so the administration can stay on the loopback address while the app server
+faces the WLAN. `--local-app-port <n>` moves it, `--no-local-app` leaves it out.
+A UID is all it takes for now - a one-time password, a certificate, a challenge
+and a response are still to come, and a start that carries one is refused until
+they are - so on an open network anybody in range can start a charge. What the
+server answers, and why, is in
+[the station's README](libs/ChargingStation/README.md#the-local-app).
+
+
 ### The wire below the charging cable
 
 `--v2g` brings up the V2G endpoint, SDP and SLAC. On one machine that is

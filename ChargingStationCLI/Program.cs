@@ -127,6 +127,15 @@ namespace cloud.charging.open.ChargingStation
             Console.WriteLine("                    different addresses. There is no sign-in on it.");
             Console.WriteLine("  --no-kiosk        do not listen for the display at all.");
             Console.WriteLine();
+            Console.WriteLine("Local app:");
+            Console.WriteLine($"  --local-app-port <n>  the TCP port of the local app server, where an app on a phone in the");
+            Console.WriteLine($"                        station's own network starts and stops a charge: POST /localStart,");
+            Console.WriteLine($"                        POST /localStop/<session>, and the WebSocket /localApp (default:");
+            Console.WriteLine($"                        {ChargingStation.DefaultLocalAppPort}). Its own server on its own port. There is no sign-in on it.");
+            Console.WriteLine("  --local-app-any       listen for the app on all addresses instead of 127.0.0.1. On its own:");
+            Console.WriteLine("                        --any does not reach it, and it does not move the web interface.");
+            Console.WriteLine("  --no-local-app        do not listen for an app at all.");
+            Console.WriteLine();
             Console.WriteLine("Accounts:");
             Console.WriteLine($"  --accounts <dir>    where the accounts live (default: {ChargingStation.DefaultAccountsPath}/ below the");
             Console.WriteLine("                      repository root). Without it a password is made up at the");
@@ -225,8 +234,13 @@ namespace cloud.charging.open.ChargingStation
                    ? "Stop whatever has it, or give the display another port with --kiosk-port <number> - " +
                      "or leave the display off altogether with --no-kiosk."
 
-                   : "Another copy of this station already running is the usual answer. Stop it, " +
-                     "or give this one another port with --port <number>.";
+                   : Problem.Whose == ChargingStation.AppPort
+
+                         ? "Stop whatever has it, or give the local app server another port with --local-app-port <number> - " +
+                           "or leave it off altogether with --no-local-app."
+
+                         : "Another copy of this station already running is the usual answer. Stop it, " +
+                           "or give this one another port with --port <number>.";
 
         #endregion
 
@@ -251,6 +265,10 @@ namespace cloud.charging.open.ChargingStation
 
             IPPort?  kioskPort      = null;
             var      noKiosk        = false;
+
+            IPPort?  localAppPort   = null;
+            var      localAppAny    = false;
+            var      noLocalApp     = false;
 
             var      v2g            = false;
             var      v2gLoopback    = false;
@@ -303,6 +321,27 @@ namespace cloud.charging.open.ChargingStation
 
                     case "--no-kiosk":
                         noKiosk = true;
+                        break;
+
+                    case "--local-app-port":
+                        if (i + 1 < Arguments.Length && UInt16.TryParse(Arguments[i + 1], out var parsedLocalAppPort))
+                        {
+                            localAppPort = IPPort.Parse(parsedLocalAppPort);
+                            i++;
+                        }
+                        else
+                        {
+                            Console.Error.WriteLine("Missing or invalid port number after --local-app-port!");
+                            return 2;
+                        }
+                        break;
+
+                    case "--local-app-any":
+                        localAppAny = true;
+                        break;
+
+                    case "--no-local-app":
+                        noLocalApp = true;
                         break;
 
                     case "--frontend":
@@ -531,6 +570,21 @@ namespace cloud.charging.open.ChargingStation
                               KioskPort:        kioskPort,
                               NoKiosk:          noKiosk,
 
+                              // On here, and on the loopback address unless it
+                              // is told otherwise: the station itself has none
+                              // unless it is given a port. It does not follow
+                              // --any, because it is the one server meant for a
+                              // network anybody may join - see LocalAppHTTPAPI -
+                              // and it should get there only when somebody says
+                              // so, and without taking the administration along.
+                              LocalAppPort:     noLocalApp
+                                                    ? null
+                                                    : localAppPort ?? ChargingStation.DefaultLocalAppPort,
+
+                              LocalAppHostname: localAppAny
+                                                    ? IPvXAddress.Any
+                                                    : IPv4Address.Localhost,
+
                               AccountsPath:     accountsPath ?? Path.Combine(RepositoryRoot(), ChargingStation.DefaultAccountsPath),
 
                               ConfigFile:       new WWCPConfigFile(
@@ -602,6 +656,7 @@ namespace cloud.charging.open.ChargingStation
                 Console.WriteLine();
                 Console.WriteLine($"  web interface  {station.WebInterfaceURL}");
                 Console.WriteLine($"  display        {station.KioskURL?.ToString() ?? "switched off (--no-kiosk)"}{(station.KioskURL.HasValue ? "  (no sign-in)" : "")}");
+                Console.WriteLine($"  local app      {station.LocalAppURL?.ToString() ?? "switched off (--no-local-app)"}{(station.LocalAppURL.HasValue ? "  (no sign-in; POST localStart, POST localStop/<session>, WebSocket localApp)" : "")}");
                 Console.WriteLine($"  JSON API       {station.WebInterfaceURL}api/v1/status");
                 Console.WriteLine($"  event stream   {station.WebInterfaceURL}api/v1/events");
                 Console.WriteLine($"  frontend from  {station.Frontend.Description}");
