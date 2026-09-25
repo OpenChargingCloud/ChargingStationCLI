@@ -132,6 +132,16 @@ be written is said once on the console rather than once per entry, every entry
 after that is tried again, and the first one that makes it is preceded by a
 line saying how many are missing.
 
+`logs/metrological/` keeps a fourth record, written by the node below the
+station: only what bears on its time — each start and stop, what the clock is
+checked against and what every check found, each change to the time servers and
+what their certificates were found to be — one `.jsonl` file per UTC day, every
+entry chained to the one before it and signed. The key that signs it lies
+beside it: `signing-key.pub.pem` checks the signatures, and whoever has
+`signing-key.pem` can sign entries of their own, so a copy of `logs/` meant for
+somebody else leaves that one file out. `--no-log-file` leaves this record out
+too.
+
 
 ### The wire below the charging cable
 
