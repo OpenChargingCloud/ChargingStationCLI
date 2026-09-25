@@ -266,6 +266,23 @@ __pycache__/
 # and does not quietly swallow a source folder of the same name.
 /accounts/
 
+# The certificate store of the node below the station, for the same reason and
+# with more to lose: whatever is imported here arrives with its private key.
+# Anchored like the accounts.
+#
+# Written at every start, beside the configuration file. The build stamp calls
+# a tree dirty when git reports anything at all, so a directory written at
+# every start would mark every build dirty and turn the marker into noise - and
+# a marker nobody believes is worse than none.
+/certificates/
+
+# The station's own two stores beside it: the keys and certificates it holds
+# up when it dials a back end, and the connections it dials, with their
+# passwords and shared secrets. Written the first time something is put in
+# them, and nobody's to commit - private keys and secrets, both.
+/ocpp-client-keys/
+/ocpp-connections/
+
 # What this station wrote down about its own runs. One file per day, and a
 # record of what this machine did rather than of what the source says - the
 # same reason as the accounts above, and the same anchor.
