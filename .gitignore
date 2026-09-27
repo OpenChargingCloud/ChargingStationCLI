@@ -297,6 +297,13 @@ __pycache__/
 # source.
 configuration.json
 
+# What each server this station connects to was last believed with: the
+# fingerprints of its certificate and its root, written beside the
+# configuration so that a change of certificate is noticed across a restart.
+# A record of what this machine saw, like the log, and not of the source - and
+# untracked, it would mark every build dirty, for the reason given below.
+known-servers.json
+
 # The sign-in this station was given before it had an accounts directory: one
 # user and a PBKDF2 hash of their password, in a file nothing reads any more.
 # Ignored rather than deleted - it is somebody's credential, and throwing away
