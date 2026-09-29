@@ -19,7 +19,7 @@
 
 using System.Reflection;
 
-using org.GraphDefined.Vanaheimr.CLI;
+using cloud.charging.open.protocols.WWCP.Node.CommandLine;
 
 #endregion
 
@@ -30,17 +30,13 @@ namespace cloud.charging.open.ChargingStation.CommandLine
     /// The command line of a running charging station.
     /// </summary>
     /// <remarks>
-    /// Everything a command needs is reachable from here, which is why every
-    /// command takes one of these: the station itself, and through it its
-    /// configuration, its log and everything the JSON API can do. A command is
-    /// a second way of asking for the same thing as the web interface - never
-    /// an implementation of its own.
-    ///
-    /// Commands are not listed anywhere. The constructor asks Styx to walk this
-    /// assembly for anything that implements ICLICommand and can be built from
-    /// a StationCLI, so a new command is a new file and nothing else.
+    /// The node's command line, with the commands every node has - syncNTS
+    /// among them - and the console until 'quit', Ctrl+C or SIGTERM. What only
+    /// a charging station can be told is a command built from a StationCLI in
+    /// this assembly, found as the node's are: a new command is a new file and
+    /// nothing else.
     /// </remarks>
-    public class StationCLI : CLI
+    public class StationCLI : NodeCLI
     {
 
         #region Data
@@ -71,7 +67,7 @@ namespace cloud.charging.open.ChargingStation.CommandLine
         public StationCLI(ChargingStation    Station,
                           params Assembly[]  AssembliesWithCLICommands)
 
-            : base(AssembliesWithCLICommands)
+            : base(Station, AssembliesWithCLICommands)
 
         {
 
