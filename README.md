@@ -143,6 +143,22 @@ somebody else leaves that one file out. `--no-log-file` leaves this record out
 too.
 
 
+### The certificate store
+
+What the station believes, what it presents and what it recognises a server by
+lives in `certificates/` beside the configuration file, one file per
+certificate, each switched on and off on its own; the **Certificates** page
+manages it. `--import-certificate <kind>=<file>` copies one in before the
+station starts — `tlsRoot=ca.pem`, say, for a time server whose chain ends at a
+root of your own — and may be given several times. `--list-certificates` prints
+what is there, `--certificates <dir>` puts the store elsewhere, and `--help`
+names the kinds. A protected PKCS#12 is opened with the password in
+`CHARGINGSTATION_CERT_PASSWORD`, or with `--certificate-password <pw>`, which
+anybody else on the machine can read in the process list. These are every
+node's switches, read by WWCP_Node, as is what the console says once the station
+is up.
+
+
 ### The local app
 
 Besides the web interface on port 2348 and the display on 2349, the program

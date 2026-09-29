@@ -21,16 +21,13 @@ using System.Net;
 using System.Security.Cryptography.X509Certificates;
 
 using org.GraphDefined.Vanaheimr.Hermod;
-using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
-using cloud.charging.open.ChargingStation;
 using cloud.charging.open.ChargingStation.CommandLine;
 using cloud.charging.open.ChargingStation.ISO15118;
-using cloud.charging.open.ChargingStation.Web;
 
 using cloud.charging.open.protocols.WWCP.Node;
+using cloud.charging.open.protocols.WWCP.Node.CommandLine;
 using cloud.charging.open.protocols.WWCP.Node.Configuration;
-using cloud.charging.open.protocols.WWCP.Node.Logging;
 
 #endregion
 
@@ -38,176 +35,19 @@ namespace cloud.charging.open.ChargingStation
 {
 
     /// <summary>
-    /// One charging station, with its web interface and a prompt, until 'quit'
-    /// or Ctrl+C.
+    /// One charging station, with its web interface and a prompt, until 'quit',
+    /// Ctrl+C or SIGTERM.
     /// </summary>
+    /// <remarks>
+    /// What every kind of node's program does is the node's: the switches and
+    /// the words -h explains them with, why it could not be set up or could not
+    /// start, what goes into the certificate store, the banner and the prompt.
+    /// What is left here is the station's: its display and its local app
+    /// server, the wire below the charging cable, what its configuration holds,
+    /// and what its banner says of all of them and of its EVSEs.
+    /// </remarks>
     public class Program
     {
-
-
-        #region (private static) TryTakeValue(Arguments, ref Index, out Value)
-
-        private static Boolean TryTakeValue(String[]     Arguments,
-                                            ref Int32    Index,
-                                            out String?  Value)
-        {
-
-            if (Index + 1 < Arguments.Length && !Arguments[Index + 1].StartsWith("--"))
-            {
-                Value = Arguments[++Index];
-                return true;
-            }
-
-            Value = null;
-            return false;
-
-        }
-
-        #endregion
-
-        #region (private static) RepositoryRoot()
-
-        /// <summary>
-        /// The directory holding ChargingStationCLI.slnx, looked up from the
-        /// binary and from the current directory; the current directory when
-        /// neither leads to it.
-        /// </summary>
-        /// <remarks>
-        /// The web login file defaults to a place below it, so that it does not
-        /// end up in bin/ - where the next "dotnet clean" would take the
-        /// station's password with it.
-        /// </remarks>
-        private static String RepositoryRoot()
-        {
-
-            foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
-            {
-
-                var directory = new DirectoryInfo(start);
-
-                while (directory is not null)
-                {
-
-                    if (File.Exists(Path.Combine(directory.FullName, "ChargingStationCLI.slnx")))
-                        return directory.FullName;
-
-                    directory = directory.Parent;
-
-                }
-
-            }
-
-            return Environment.CurrentDirectory;
-
-        }
-
-        #endregion
-
-        #region (private static) PrintUsage()
-
-        private static void PrintUsage()
-        {
-            Console.WriteLine("Usage: ChargingStationCLI [--port <number>] [--any] [--frontend <dist directory>]");
-            Console.WriteLine("                          [--accounts <dir>] [--config <file>] [--verbose | --quiet]");
-            Console.WriteLine("                          [--no-trace] [--log-file <dir>] [--no-log-file]");
-            Console.WriteLine("                          [--v2g [--v2g-interface <name>] [--v2g-port <n>] [--v2g-cert <file>]");
-            Console.WriteLine("                                 [--v2g-loopback] [--slac-udp <ip:port>] [--evse-id <id>]]");
-            Console.WriteLine();
-            Console.WriteLine("Web interface:");
-            Console.WriteLine($"  --port <number>   TCP port to listen on (default: {ChargingStation.DefaultHTTPPort})");
-            Console.WriteLine("  --any             listen on all addresses instead of 127.0.0.1");
-            Console.WriteLine("  --frontend <dir>  serve the web interface from a directory on disk instead of the");
-            Console.WriteLine("                    bundle embedded in the assembly - use it together with");
-            Console.WriteLine("                    'npm run watch' in ChargingStation/Frontend");
-            Console.WriteLine();
-            Console.WriteLine("Display:");
-            Console.WriteLine($"  --kiosk-port <n>  the TCP port of the display, the page for the screen on the front");
-            Console.WriteLine($"                    of the station (default: {ChargingStation.DefaultKioskPort}). Its own server on its own");
-            Console.WriteLine("                    port, so that it and the web interface can be bound to");
-            Console.WriteLine("                    different addresses. There is no sign-in on it.");
-            Console.WriteLine("  --no-kiosk        do not listen for the display at all.");
-            Console.WriteLine();
-            Console.WriteLine("Local app:");
-            Console.WriteLine($"  --local-app-port <n>  the TCP port of the local app server, where an app on a phone in the");
-            Console.WriteLine($"                        station's own network starts and stops a charge: POST /localStart,");
-            Console.WriteLine($"                        POST /localStop/<session>, and the WebSocket /localApp (default:");
-            Console.WriteLine($"                        {ChargingStation.DefaultLocalAppPort}). Its own server on its own port. There is no sign-in on it.");
-            Console.WriteLine("  --local-app-any       listen for the app on all addresses instead of 127.0.0.1. On its own:");
-            Console.WriteLine("                        --any does not reach it, and it does not move the web interface.");
-            Console.WriteLine("  --no-local-app        do not listen for an app at all.");
-            Console.WriteLine();
-            Console.WriteLine("Accounts:");
-            Console.WriteLine($"  --accounts <dir>    where the accounts live (default: {ChargingStation.DefaultAccountsPath}/ below the");
-            Console.WriteLine("                      repository root). Without it a password is made up at the");
-            Console.WriteLine($"                      first start for the user '{ChargingStation.DefaultAdminUser}' and shown once.");
-            Console.WriteLine();
-            Console.WriteLine("Configuration:");
-            Console.WriteLine($"  --config <file>   where the name servers, the time servers, the EVSEs, the power");
-            Console.WriteLine($"                    limits and the calibration certificates of this station live");
-            Console.WriteLine($"                    (default: {WWCPConfigFile.DefaultFileName} below the repository");
-            Console.WriteLine("                    root). Without the file the station has one 22 kW type 2 socket");
-            Console.WriteLine("                    and the system defaults; the Configuration pages of the web");
-            Console.WriteLine("                    interface write it, and every change there takes effect at once.");
-            Console.WriteLine();
-            Console.WriteLine("The wire below the charging cable (ISO 15118), off unless asked for:");
-            Console.WriteLine("  Everything here except the certificate and the simulated SLAC medium can");
-            Console.WriteLine("  also be written in the \"v2g\" section of the configuration file, and changed");
-            Console.WriteLine("  on the V2G page of the web interface while the station runs. The file has");
-            Console.WriteLine("  the last word on whatever it mentions.");
-            Console.WriteLine();
-            Console.WriteLine("  --v2g             bring up the V2G endpoint, SDP and SLAC");
-            Console.WriteLine("  --v2g-interface <name>");
-            Console.WriteLine("                    the interface the vehicle is on, i.e. the powerline modem;");
-            Console.WriteLine("                    without one the candidate that carries no IPv4 address is");
-            Console.WriteLine("                    taken. Nothing in ISO 15118 is IPv4, while the interface a");
-            Console.WriteLine("                    machine is administered over practically always has one, so");
-            Console.WriteLine("                    that is very probably the port with the vehicle behind it.");
-            Console.WriteLine("                    The console says which it took and why");
-            Console.WriteLine($"  --v2g-port <n>    the TCP port of the V2G endpoint (default: {V2GOptions.DefaultV2GPort}, which IANA");
-            Console.WriteLine("                    registers for v2g-secc). ISO 15118 does not require it - the");
-            Console.WriteLine("                    port travels in the SDP response, so a vehicle finds the");
-            Console.WriteLine("                    endpoint wherever it is. Pass 0 to let the operating system");
-            Console.WriteLine("                    pick a free one, which is what a machine running two");
-            Console.WriteLine("                    stations wants. Whichever it is, that is what SDP advertises");
-            Console.WriteLine("  --v2g-cert <file> a PKCS#12 certificate for the V2G endpoint, so that it speaks");
-            Console.WriteLine("                    TLS 1.3 as ISO 15118-20 requires; the password is read from");
-            Console.WriteLine($"                    the environment variable {V2GCertificatePasswordVariable}.");
-            Console.WriteLine("                    Without a certificate the endpoint speaks plain TCP and SDP");
-            Console.WriteLine("                    says so, rather than sending vehicles into a handshake that");
-            Console.WriteLine("                    cannot finish");
-            Console.WriteLine("  --v2g-loopback    also answer SDP requests coming from this same machine, for a");
-            Console.WriteLine("                    bench where the vehicle runs here too. Off in the field: a");
-            Console.WriteLine("                    station has no business answering a simulator somebody left");
-            Console.WriteLine("                    running on its own controller. Set it on the vehicle as well -");
-            Console.WriteLine("                    which of the two sockets decides depends on the platform");
-            Console.WriteLine("  --slac-udp <ip:port>");
-            Console.WriteLine("                    run SLAC over a simulated medium instead of a powerline modem,");
-            Console.WriteLine("                    e.g. 127.0.0.1:0 for a bench. Without this, SLAC needs");
-            Console.WriteLine("                    AF_PACKET and therefore Linux, and says so where it cannot");
-            Console.WriteLine($"  --evse-id <id>    what SLAC hands a vehicle (default: {V2GOptions.DefaultEVSEId})");
-            Console.WriteLine();
-            Console.WriteLine("Log:");
-            Console.WriteLine("  -v, --verbose     write every entry to the console, down to the debug ones");
-            Console.WriteLine("  -q, --quiet       write only warnings and worse");
-            Console.WriteLine("      --no-trace    do not pick up what the libraries below write with DebugX");
-            Console.WriteLine();
-            Console.WriteLine("Whatever the console shows, the web interface shows the whole log under 'Logs'.");
-            Console.WriteLine();
-            Console.WriteLine($"  --log-file <dir>  where the log files go (default: {ChargingStation.DefaultLogPath}/ below the repository");
-            Console.WriteLine("                    root): one file per UTC day, every entry down to the debug");
-            Console.WriteLine("                    ones, and nothing is ever deleted.");
-            Console.WriteLine("      --no-log-file do not write one. Then what the console did not show, and");
-            Console.WriteLine($"                    what falls out of the web interface's last {EventLog.DefaultCapacity} entries, is");
-            Console.WriteLine("                    gone.");
-            Console.WriteLine();
-            Console.WriteLine("Once it is up, the console is a prompt: 'help' lists what can be typed there,");
-            Console.WriteLine("Tab completes it, and 'quit' or Ctrl+C stops the station. Started where there is");
-            Console.WriteLine("no terminal - from a script, under a service manager, in CI, or with the output");
-            Console.WriteLine("going into a file - there is no prompt and it simply runs.");
-        }
-
-        #endregion
-
 
         /// <summary>
         /// Where the password of the V2G certificate is read from, so that it
@@ -216,18 +56,127 @@ namespace cloud.charging.open.ChargingStation
         public const String V2GCertificatePasswordVariable = "CHARGINGSTATION_V2G_CERT_PASSWORD";
 
 
+        #region (private static) Usage
+
+        /// <summary>
+        /// What -h shows: every node's switches, in a charging station's words,
+        /// and the station's own.
+        /// </summary>
+        private static readonly NodeUsage Usage = new (
+
+            Program:               "ChargingStationCLI",
+            Kind:                  ChargingStation.ChargingStationKind,
+            DefaultPort:           ChargingStation.DefaultHTTPPort,
+            FrontendSources:       "libs/ChargingStation/ChargingStation/Frontend",
+
+            ConfigurationSays:     "where the name servers, the time servers, the EVSEs, the power limits and the calibration " +
+                                  $"certificates of this station live (default: {WWCPConfigFile.DefaultFileName} below the " +
+                                   "repository root). Without the file the station has one 22 kW type 2 socket and the system " +
+                                   "defaults; the Configuration pages of the web interface write it, and every change there " +
+                                   "takes effect at once.",
+
+            CertificateKinds:      ChargingStation.StoredCertificateKinds,
+
+            Synopsis:              [ "[--kiosk-port <n>]", "[--no-kiosk]",
+                                     "[--local-app-port <n>]", "[--local-app-any]", "[--no-local-app]",
+                                     "[--v2g]", "[--v2g-interface <name>]", "[--v2g-port <n>]", "[--v2g-cert <file>]",
+                                     "[--v2g-loopback]", "[--slac-udp <ip:port>]", "[--evse-id <id>]" ],
+
+            AfterTheWebInterface: [
+
+                "Display:",
+
+                .. NodeUsage.Switch("--kiosk-port <n>",     "the TCP port of the display, the page for the screen on the front of the " +
+                                                           $"station (default: {ChargingStation.DefaultKioskPort}). Its own server on its own " +
+                                                            "port, so that it and the web interface can be bound to different addresses. " +
+                                                            "There is no sign-in on it."),
+
+                .. NodeUsage.Switch("--no-kiosk",           "do not listen for the display at all."),
+
+                "",
+
+                "Local app:",
+
+                .. NodeUsage.Switch("--local-app-port <n>", "the TCP port of the local app server, where an app on a phone in the " +
+                                                            "station's own network starts and stops a charge: POST /localStart, " +
+                                                            "POST /localStop/<session>, and the WebSocket /localApp (default: " +
+                                                           $"{ChargingStation.DefaultLocalAppPort}). Its own server on its own port. " +
+                                                            "There is no sign-in on it."),
+
+                .. NodeUsage.Switch("--local-app-any",      "listen for the app on all addresses instead of 127.0.0.1. On its own: " +
+                                                            "--any does not reach it, and it does not move the web interface."),
+
+                .. NodeUsage.Switch("--no-local-app",       "do not listen for an app at all."),
+
+                ""
+
+            ],
+
+            BeforeTheLog: [
+
+                "The wire below the charging cable (ISO 15118), off unless asked for:",
+
+                .. NodeUsage.Wrap("Everything here except the certificate and the simulated SLAC medium can also be written in " +
+                                  "the \"v2g\" section of the configuration file, and changed on the V2G page of the web interface " +
+                                  "while the station runs. The file has the last word on whatever it mentions.",
+                                  "  ",
+                                  "  "),
+
+                "",
+
+                .. NodeUsage.Switch("--v2g",                "bring up the V2G endpoint, SDP and SLAC"),
+
+                .. NodeUsage.Switch("--v2g-interface <name>",
+                                                            "the interface the vehicle is on, i.e. the powerline modem; without one the " +
+                                                            "candidate that carries no IPv4 address is taken. Nothing in ISO 15118 is IPv4, " +
+                                                            "while the interface a machine is administered over practically always has " +
+                                                            "one, so that is very probably the port with the vehicle behind it. The console " +
+                                                            "says which it took and why"),
+
+                .. NodeUsage.Switch("--v2g-port <n>",      $"the TCP port of the V2G endpoint (default: {V2GOptions.DefaultV2GPort}, which IANA " +
+                                                            "registers for v2g-secc). ISO 15118 does not require it - the port travels in " +
+                                                            "the SDP response, so a vehicle finds the endpoint wherever it is. Pass 0 to let " +
+                                                            "the operating system pick a free one, which is what a machine running two " +
+                                                            "stations wants. Whichever it is, that is what SDP advertises"),
+
+                .. NodeUsage.Switch("--v2g-cert <file>",    "a PKCS#12 certificate for the V2G endpoint, so that it speaks TLS 1.3 as " +
+                                                            "ISO 15118-20 requires; the password is read from the environment variable " +
+                                                           $"{V2GCertificatePasswordVariable}. Without a certificate the endpoint speaks " +
+                                                            "plain TCP and SDP says so, rather than sending vehicles into a handshake " +
+                                                            "that cannot finish"),
+
+                .. NodeUsage.Switch("--v2g-loopback",       "also answer SDP requests coming from this same machine, for a bench where " +
+                                                            "the vehicle runs here too. Off in the field: a station has no business " +
+                                                            "answering a simulator somebody left running on its own controller. Set it on " +
+                                                            "the vehicle as well: which of the two sockets decides depends on the platform"),
+
+                .. NodeUsage.Switch("--slac-udp <ip:port>", "run SLAC over a simulated medium instead of a powerline modem, e.g. " +
+                                                            "127.0.0.1:0 for a bench. Without this, SLAC needs AF_PACKET and therefore " +
+                                                            "Linux, and says so where it cannot"),
+
+                .. NodeUsage.Switch("--evse-id <id>",      $"what SLAC hands a vehicle (default: {V2GOptions.DefaultEVSEId})"),
+
+                ""
+
+            ]
+
+        );
+
+        #endregion
+
         #region (private static) WhatToDoAbout(Problem)
 
         /// <summary>
-        /// The way past a port that cannot be had, in the words of whoever
-        /// started this station.
+        /// The way past the port of the display or of the local app server,
+        /// in the words of whoever started this station; null for the web
+        /// interface's, which is every node's.
         /// </summary>
         /// <remarks>
         /// Here and not in the station, because the switches are this
         /// program's vocabulary: the station knows which port it wanted and
         /// what the socket layer said, and nothing about how it was started.
         /// </remarks>
-        private static String WhatToDoAbout(PortUnavailableException Problem)
+        private static String? WhatToDoAbout(PortUnavailableException Problem)
 
             => Problem.Whose == ChargingStation.DisplayPort
 
@@ -239,8 +188,87 @@ namespace cloud.charging.open.ChargingStation
                          ? "Stop whatever has it, or give the local app server another port with --local-app-port <number> - " +
                            "or leave it off altogether with --no-local-app."
 
-                         : "Another copy of this station already running is the usual answer. Stop it, " +
-                           "or give this one another port with --port <number>.";
+                         : null;
+
+        #endregion
+
+
+        #region (private static) BesideTheWebInterface(Station)
+
+        /// <summary>
+        /// The two other things this station listens for, beside the web
+        /// interface: the display and the local app server, each said to be
+        /// off where it is.
+        /// </summary>
+        private static IEnumerable<(String Label, String Value)> BesideTheWebInterface(ChargingStation Station)
+        {
+
+            yield return ("display",    Station.KioskURL is { } display
+                                            ? $"{display}  (no sign-in)"
+                                            : "switched off (--no-kiosk)");
+
+            yield return ("local app",  Station.LocalAppURL is { } app
+                                            ? $"{app}  (no sign-in; POST localStart, POST localStop/<session>, WebSocket localApp)"
+                                            : "switched off (--no-local-app)");
+
+        }
+
+        #endregion
+
+        #region (private static) OfTheStation(Station)
+
+        /// <summary>
+        /// What this station is: its EVSEs, what the grid allows it, and the
+        /// calibration certificates it runs under, where it has any.
+        /// </summary>
+        private static IEnumerable<(String Label, String Value)> OfTheStation(ChargingStation Station)
+        {
+
+            yield return ("EVSEs",  $"{Station.EVSEs.Count}: {String.Join(", ", Station.EVSEs.Select(evse => evse.ToString()))}");
+
+            yield return ("grid",   Station.UplinkPowerLimit_kW.HasValue
+                                        ? $"up to {Station.UplinkPowerLimit_kW.Value} kW"
+                                        : "no limit configured");
+
+            if (Station.CalibrationCertificates.Count > 0)
+                yield return ("calibration", String.Join(", ", Station.CalibrationCertificates.Select(certificate => certificate.Id)));
+
+        }
+
+        #endregion
+
+        #region (private static) BelowTheCable(Station)
+
+        /// <summary>
+        /// What is on the wire below the charging cable.
+        /// </summary>
+        private static IEnumerable<(String Label, String Value)> BelowTheCable(ChargingStation Station)
+        {
+
+            // Said even when there is nothing to say, because "the V2G lines
+            // are missing" and "V2G is off" look identical on a console and
+            // only one of them is a thing somebody configured.
+            if (Station.V2G is not { } link)
+            {
+                yield return ("V2G", Station.V2GOptions.Enabled
+                                         ? "switched on, but nothing came up - see the log"
+                                         : "switched off");
+                yield break;
+            }
+
+            // Which interface, and what made it that one, on a line of its own
+            // rather than in a parenthesis behind SDP: on a machine with two of
+            // them this is the first thing somebody checks, and the reason is
+            // the half that saves the afternoon.
+            yield return ("V2G interface",  link.InterfaceChoice ?? "none");
+
+            yield return ("V2G endpoint",   (link.V2GEndpoint?.ToString() ?? "not listening") +
+                                            (link.V2GEndpoint is not null ? link.UsesTLS ? ", TLS 1.3" : ", plain TCP" : ""));
+
+            yield return ("SDP",            link.SDPRunning  ? "answering" : "not running");
+            yield return ("SLAC",           link.SLACRunning ? "listening" : "not running");
+
+        }
 
         #endregion
 
@@ -252,16 +280,12 @@ namespace cloud.charging.open.ChargingStation
 
             #region Arguments
 
-            IPPort?  port           = null;
-            var      anyAddress     = false;
-            String?  frontendDir    = null;
-            String?  accountsPath   = null;
-            String?  logPath        = null;
-            var      noLogFile      = false;
-            String?  configFilePath = null;
-            var      verbose        = false;
-            var      quiet          = false;
-            var      noTrace        = false;
+            // Every node's switches first. What is left is the station's own,
+            // as it was typed.
+            var arguments = NodeArguments.Parse(Arguments);
+
+            if (arguments.Refused(Usage) is Int32 refused)
+                return refused;
 
             IPPort?  kioskPort      = null;
             var      noKiosk        = false;
@@ -284,30 +308,15 @@ namespace cloud.charging.open.ChargingStation
             String?  slacUDP        = null;
             var      evseId         = V2GOptions.DefaultEVSEId;
 
-            for (var i = 0; i < Arguments.Length; i++)
+            var      rest           = arguments.Rest;
+
+            for (var i = 0; i < rest.Count; i++)
             {
-                switch (Arguments[i])
+                switch (rest[i])
                 {
 
-                    case "--port":
-                        if (i + 1 < Arguments.Length && UInt16.TryParse(Arguments[i + 1], out var parsedPort))
-                        {
-                            port = IPPort.Parse(parsedPort);
-                            i++;
-                        }
-                        else
-                        {
-                            Console.Error.WriteLine("Missing or invalid port number after --port!");
-                            return 2;
-                        }
-                        break;
-
-                    case "--any":
-                        anyAddress = true;
-                        break;
-
                     case "--kiosk-port":
-                        if (i + 1 < Arguments.Length && UInt16.TryParse(Arguments[i + 1], out var parsedKioskPort))
+                        if (i + 1 < rest.Count && UInt16.TryParse(rest[i + 1], out var parsedKioskPort))
                         {
                             kioskPort = IPPort.Parse(parsedKioskPort);
                             i++;
@@ -324,7 +333,7 @@ namespace cloud.charging.open.ChargingStation
                         break;
 
                     case "--local-app-port":
-                        if (i + 1 < Arguments.Length && UInt16.TryParse(Arguments[i + 1], out var parsedLocalAppPort))
+                        if (i + 1 < rest.Count && UInt16.TryParse(rest[i + 1], out var parsedLocalAppPort))
                         {
                             localAppPort = IPPort.Parse(parsedLocalAppPort);
                             i++;
@@ -344,62 +353,12 @@ namespace cloud.charging.open.ChargingStation
                         noLocalApp = true;
                         break;
 
-                    case "--frontend":
-                        if (!TryTakeValue(Arguments, ref i, out frontendDir))
-                        {
-                            Console.Error.WriteLine("Missing directory after --frontend!");
-                            return 2;
-                        }
-                        break;
-
-                    case "--accounts":
-                        if (!TryTakeValue(Arguments, ref i, out accountsPath))
-                        {
-                            Console.Error.WriteLine("Missing directory after --accounts!");
-                            return 2;
-                        }
-                        break;
-
-                    case "--log-file":
-                        if (!TryTakeValue(Arguments, ref i, out logPath))
-                        {
-                            Console.Error.WriteLine("Missing directory after --log-file!");
-                            return 2;
-                        }
-                        break;
-
-                    case "--no-log-file":
-                        noLogFile = true;
-                        break;
-
-                    case "--config":
-                        if (!TryTakeValue(Arguments, ref i, out configFilePath))
-                        {
-                            Console.Error.WriteLine("Missing file after --config!");
-                            return 2;
-                        }
-                        break;
-
-                    case "-v":
-                    case "--verbose":
-                        verbose = true;
-                        break;
-
-                    case "-q":
-                    case "--quiet":
-                        quiet = true;
-                        break;
-
-                    case "--no-trace":
-                        noTrace = true;
-                        break;
-
                     case "--v2g":
                         v2g = true;
                         break;
 
                     case "--v2g-interface":
-                        if (!TryTakeValue(Arguments, ref i, out v2gInterface))
+                        if (!NodeArguments.TryTakeValue(rest, ref i, out v2gInterface))
                         {
                             Console.Error.WriteLine("Missing interface name after --v2g-interface!");
                             return 2;
@@ -408,7 +367,7 @@ namespace cloud.charging.open.ChargingStation
                         break;
 
                     case "--v2g-port":
-                        if (i + 1 < Arguments.Length && UInt16.TryParse(Arguments[i + 1], out v2gPort))
+                        if (i + 1 < rest.Count && UInt16.TryParse(rest[i + 1], out v2gPort))
                         {
                             i++;
                             v2g = true;
@@ -421,7 +380,7 @@ namespace cloud.charging.open.ChargingStation
                         break;
 
                     case "--v2g-cert":
-                        if (!TryTakeValue(Arguments, ref i, out v2gCertFile))
+                        if (!NodeArguments.TryTakeValue(rest, ref i, out v2gCertFile))
                         {
                             Console.Error.WriteLine("Missing PKCS#12 file after --v2g-cert!");
                             return 2;
@@ -435,7 +394,7 @@ namespace cloud.charging.open.ChargingStation
                         break;
 
                     case "--slac-udp":
-                        if (!TryTakeValue(Arguments, ref i, out slacUDP))
+                        if (!NodeArguments.TryTakeValue(rest, ref i, out slacUDP))
                         {
                             Console.Error.WriteLine("Missing endpoint after --slac-udp!");
                             return 2;
@@ -444,7 +403,7 @@ namespace cloud.charging.open.ChargingStation
                         break;
 
                     case "--evse-id":
-                        if (!TryTakeValue(Arguments, ref i, out var parsedEVSEId))
+                        if (!NodeArguments.TryTakeValue(rest, ref i, out var parsedEVSEId))
                         {
                             Console.Error.WriteLine("Missing identification after --evse-id!");
                             return 2;
@@ -453,46 +412,13 @@ namespace cloud.charging.open.ChargingStation
                         v2g    = true;
                         break;
 
-                    case "-h":
-                    case "--help":
-                        PrintUsage();
-                        return 0;
-
                     default:
-                        Console.Error.WriteLine($"Unknown argument '{Arguments[i]}'!");
-                        PrintUsage();
-                        return 2;
+                        return NodeArguments.Unknown(rest[i], Usage);
 
                 }
             }
 
-            if (verbose && quiet)
-            {
-                Console.Error.WriteLine("--verbose and --quiet ask for opposite things!");
-                return 2;
-            }
-
-            #endregion
-
-            #region Where the web interface comes from
-
-            // A directory given on the command line wins, so that
-            // "npm run watch" beside a running station shows up in the browser
-            // on a reload, without rebuilding the C# side.
-            IStaticContentSource? frontend = null;
-
-            if (frontendDir is not null)
-            {
-
-                if (!Directory.Exists(frontendDir))
-                {
-                    Console.Error.WriteLine($"The frontend directory '{frontendDir}' does not exist!");
-                    return 2;
-                }
-
-                frontend = new FileSystemContentSource(frontendDir);
-
-            }
+            var root = NodeProgram.RepositoryRoot("ChargingStationCLI.slnx");
 
             #endregion
 
@@ -555,11 +481,8 @@ namespace cloud.charging.open.ChargingStation
             {
                 station = new ChargingStation(
 
-                              HTTPHostname:     anyAddress
-                                                    ? IPvXAddress.Any
-                                                    : IPv4Address.Localhost,
-
-                              HTTPPort:         port,
+                              HTTPHostname:      arguments.HTTPHostname,
+                              HTTPPort:          arguments.Port,
 
                               // The display is its own server on its own port,
                               // so that it and the administration can be bound
@@ -567,8 +490,8 @@ namespace cloud.charging.open.ChargingStation
                               // see KioskHTTPAPI. It follows --any, because a
                               // display on a screen is normally the one of the
                               // two that has to be reachable from elsewhere.
-                              KioskPort:        kioskPort,
-                              NoKiosk:          noKiosk,
+                              KioskPort:         kioskPort,
+                              NoKiosk:           noKiosk,
 
                               // On here, and on the loopback address unless it
                               // is told otherwise: the station itself has none
@@ -577,170 +500,48 @@ namespace cloud.charging.open.ChargingStation
                               // network anybody may join - see LocalAppHTTPAPI -
                               // and it should get there only when somebody says
                               // so, and without taking the administration along.
-                              LocalAppPort:     noLocalApp
-                                                    ? null
-                                                    : localAppPort ?? ChargingStation.DefaultLocalAppPort,
+                              LocalAppPort:      noLocalApp
+                                                     ? null
+                                                     : localAppPort ?? ChargingStation.DefaultLocalAppPort,
 
-                              LocalAppHostname: localAppAny
-                                                    ? IPvXAddress.Any
-                                                    : IPv4Address.Localhost,
+                              LocalAppHostname:  localAppAny
+                                                     ? IPvXAddress.Any
+                                                     : IPv4Address.Localhost,
 
-                              AccountsPath:     accountsPath ?? Path.Combine(RepositoryRoot(), ChargingStation.DefaultAccountsPath),
-
-                              ConfigFile:       new WWCPConfigFile(
-                                                    configFilePath ?? Path.Combine(RepositoryRoot(), WWCPConfigFile.DefaultFileName)
-                                                ),
-
-                              Frontend:         frontend,
-
-                              V2G:              v2gOptions,
-
-                              ConsoleLogLevel:  verbose ? LogLevel.Debug
-                                                    : quiet ? LogLevel.Warning
-                                                    : LogLevel.Info,
-
-                              // On unless it is switched off. A console nobody
-                              // was watching kept nothing, and the log a
-                              // browser shows goes with the process - so the
-                              // one place a question about last night can still
-                              // be answered from is a file.
-                              LogPath:          noLogFile
-                                                    ? null
-                                                    : logPath ?? Path.Combine(RepositoryRoot(), ChargingStation.DefaultLogPath),
-
-                              BridgeDebugLog:   !noTrace
+                              AccountsPath:      arguments.AccountsPathBelow(root),
+                              ConfigFile:        new WWCPConfigFile(arguments.ConfigFilePathBelow(root)),
+                              Frontend:          arguments.Frontend,
+                              CertificatesPath:  arguments.CertificatesPath,
+                              V2G:               v2gOptions,
+                              ConsoleLogLevel:   arguments.ConsoleLogLevel,
+                              LogPath:           arguments.LogPathBelow(root),
+                              BridgeDebugLog:    !arguments.NoTrace
 
                           );
             }
             catch (Exception e)
             {
-
-                Console.Error.WriteLine($"The charging station could not be set up: {e.Message}");
-
-                // A station that does not come up at all is the one moment the
-                // stack trace is worth more than a tidy console.
-                if (verbose)
-                    Console.Error.WriteLine(e);
-
-                return 1;
-
+                return NodeProgram.CouldNotBeSetUp(ChargingStation.ChargingStationKind, e, arguments.Verbose);
             }
 
             await using (station)
             {
 
-                try
-                {
-                    await station.Start();
-                }
-                catch (PortUnavailableException problem)
-                {
+                if (station.ImportCertificates(arguments, out _) is Int32 notImported)
+                    return notImported;
 
-                    // What somebody starting a second copy of this station used
-                    // to get was thirteen frames of stack trace under the
-                    // operating system's own words for a port in use - in
-                    // German on a German Windows, under eleven lines of English
-                    // log, with the port named nowhere.
-                    Console.Error.WriteLine($"The charging station could not start: {problem.Message}.");
-                    Console.Error.WriteLine(WhatToDoAbout(problem));
+                if (arguments.ListCertificates)
+                    station.ListCertificates();
 
-                    if (verbose)
-                        Console.Error.WriteLine(problem);
-
-                    return 1;
-
-                }
+                if (await station.Started(arguments.Verbose, WhatToDoAbout) is Int32 notStarted)
+                    return notStarted;
 
                 #region What somebody who just started this needs to know
 
-                Console.WriteLine();
-                Console.WriteLine($"  web interface  {station.WebInterfaceURL}");
-                Console.WriteLine($"  display        {station.KioskURL?.ToString() ?? "switched off (--no-kiosk)"}{(station.KioskURL.HasValue ? "  (no sign-in)" : "")}");
-                Console.WriteLine($"  local app      {station.LocalAppURL?.ToString() ?? "switched off (--no-local-app)"}{(station.LocalAppURL.HasValue ? "  (no sign-in; POST localStart, POST localStop/<session>, WebSocket localApp)" : "")}");
-                Console.WriteLine($"  JSON API       {station.WebInterfaceURL}api/v1/status");
-                Console.WriteLine($"  event stream   {station.WebInterfaceURL}api/v1/events");
-                Console.WriteLine($"  frontend from  {station.Frontend.Description}");
-
-                foreach (var line in station.BuiltFrom.BannerLines())
+                foreach (var line in station.Banner(BesideTheInterfaces:  BesideTheWebInterface(station),
+                                                    OfTheKind:            OfTheStation(station),
+                                                    AfterTheTimeServers:  BelowTheCable(station)))
                     Console.WriteLine(line);
-
-                Console.WriteLine($"  accounts      {station.ExtAPI.Users.Count()} user(s) in {station.AccountsPath}");
-                Console.WriteLine($"  sign in at     {station.WebInterfaceURL}{ChargingStation.ExtAPIPath.ToString().Trim('/')}/login");
-                Console.WriteLine($"  configuration  {station.ConfigFile.Path}");
-                Console.WriteLine($"  log files      {station.LogPath ?? "none (--no-log-file)"}");
-                Console.WriteLine($"  EVSEs          {station.EVSEs.Count}: {String.Join(", ", station.EVSEs.Select(evse => evse.ToString()))}");
-                Console.WriteLine($"  grid           {(station.UplinkPowerLimit_kW.HasValue ? $"up to {station.UplinkPowerLimit_kW.Value} kW" : "no limit configured")}");
-
-                if (station.CalibrationCertificates.Count > 0)
-                    Console.WriteLine($"  calibration    {String.Join(", ", station.CalibrationCertificates.Select(certificate => certificate.Id))}");
-                Console.WriteLine($"  name servers   {(station.DNSEnabled ? String.Join(", ", station.DNSClient.DNSServers) : "switched off")}");
-                #region The time servers
-
-                var bands = station.TimeSources.Bands();
-                var asked = bands.SelectMany(band => band).ToArray();
-
-                // The group's one server where it has one, and trimmed as the
-                // servers of a longer list are below: this used to be the host of
-                // the single client the detailed test starts from, with its root
-                // dot, which only showed with a group of one.
-                if (asked.Length <= 1)
-                    Console.WriteLine($"  time server    {(asked.Length == 1 ? asked[0].Hostname : station.NTSClient.Hostname).Trimmed}{(station.NTSEnabled ? "" : " (switched off)")}");
-
-                else
-                {
-
-                    // One line per band, because a band is the unit that is
-                    // asked at once - putting two bands on one line would read
-                    // as six equal servers when it is two and then four.
-                    for (var i = 0; i < bands.Count; i++)
-                        Console.WriteLine((i == 0 ? "  time servers   " : "                 ") +
-                                          String.Join(", ", bands[i].Select(source => source.Hostname.Trimmed)) +
-                                          (bands.Count > 1 ? $"   (priority {bands[i][0].Priority})" : ""));
-
-                    Console.WriteLine($"                 at least {station.TimeSources.MinServers} of them must answer" +
-                                      (station.NTSEnabled ? "" : " - and NTS is switched off"));
-
-                }
-
-                #endregion
-
-                // Said even when there is nothing to say, because "the V2G
-                // lines are missing" and "V2G is off" look identical on a
-                // console and only one of them is a thing somebody configured.
-                if (station.V2G is null)
-                    Console.WriteLine($"  V2G            {(station.V2GOptions.Enabled ? "switched on, but nothing came up - see the log" : "switched off")}");
-
-                if (station.V2G is { } link)
-                {
-                    // Which interface, and what made it that one, on a line of
-                    // its own rather than in a parenthesis behind SDP: on a
-                    // machine with two of them this is the first thing somebody
-                    // checks, and the reason is the half that saves the
-                    // afternoon.
-                    Console.WriteLine($"  V2G interface  {link.InterfaceChoice ?? "none"}");
-                    Console.WriteLine($"  V2G endpoint   {link.V2GEndpoint?.ToString() ?? "not listening"}" +
-                                      (link.V2GEndpoint is not null ? link.UsesTLS ? ", TLS 1.3" : ", plain TCP" : ""));
-                    Console.WriteLine($"  SDP            {(link.SDPRunning  ? "answering" : "not running")}");
-                    Console.WriteLine($"  SLAC           {(link.SLACRunning ? "listening" : "not running")}");
-                }
-
-                if (station.GeneratedPassword is not null)
-                {
-                    Console.WriteLine();
-                    Console.WriteLine("  ┌─ First start: there were no accounts, so one was made up for you ─────────");
-                    Console.WriteLine($"  │  user      {ChargingStation.DefaultAdminUser}");
-                    Console.WriteLine($"  │  password  {station.GeneratedPassword}");
-                    // Named rather than called "a hash", and read from the
-                    // implementation rather than typed here, so the box cannot
-                    // end up describing a scheme this station no longer uses.
-                    // "i=600000" is also how passwords.db writes it down, which
-                    // is where somebody checking this will look.
-                    Console.WriteLine($"  │  It is shown here once and kept only as a {SecurePassword.PBKDF2SHA256} hash");
-                    Console.WriteLine($"  │  over {SecurePassword.DefaultIterations} iterations. Write it down.");
-                    Console.WriteLine("  └───────────────────────────────────────────────────────────────────────────");
-                }
-
-                Console.WriteLine();
 
                 #endregion
 
