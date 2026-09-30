@@ -192,6 +192,28 @@ namespace cloud.charging.open.ChargingStation
 
         #endregion
 
+        #region (private static) SwitchOf(Problem)
+
+        /// <summary>
+        /// The switch that sets the port of the display or of the local app
+        /// server; null for the web interface's, which is --port on every node.
+        /// </summary>
+        /// <remarks>
+        /// For what the node says of a port the operating system will not give
+        /// this program - below 1024 on Linux: "or pick a port above 1024 with
+        /// --kiosk-port." rather than naming no switch. Where the address is in
+        /// use, WhatToDoAbout says what to do first.
+        /// </remarks>
+        private static String? SwitchOf(PortUnavailableException Problem)
+
+            => Problem.Whose == ChargingStation.DisplayPort
+                   ? "--kiosk-port"
+                   : Problem.Whose == ChargingStation.AppPort
+                         ? "--local-app-port"
+                         : null;
+
+        #endregion
+
 
         #region (private static) BesideTheWebInterface(Station)
 
@@ -533,7 +555,7 @@ namespace cloud.charging.open.ChargingStation
                 if (arguments.ListCertificates)
                     station.ListCertificates();
 
-                if (await station.Started(arguments.Verbose, WhatToDoAbout) is Int32 notStarted)
+                if (await station.Started(arguments.Verbose, WhatToDoAbout, SwitchOf: SwitchOf) is Int32 notStarted)
                     return notStarted;
 
                 #region What somebody who just started this needs to know
