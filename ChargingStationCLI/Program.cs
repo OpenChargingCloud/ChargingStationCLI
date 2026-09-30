@@ -303,7 +303,10 @@ namespace cloud.charging.open.ChargingStation
             #region Arguments
 
             // Every node's switches first. What is left is the station's own,
-            // as it was typed.
+            // as it was typed, and refused as the node refuses its: through
+            // NodeProgram.Say, in lines of 80 columns. A V2G certificate that
+            // could not be read was said in one line of 307, and where its
+            // password comes from in one of 84.
             var arguments = NodeArguments.Parse(Arguments);
 
             if (arguments.Refused(Usage) is Int32 refused)
@@ -345,7 +348,7 @@ namespace cloud.charging.open.ChargingStation
                         }
                         else
                         {
-                            Console.Error.WriteLine("Missing or invalid port number after --kiosk-port!");
+                            NodeProgram.Say(Console.Error, "Missing or invalid port number after --kiosk-port!");
                             return 2;
                         }
                         break;
@@ -362,7 +365,7 @@ namespace cloud.charging.open.ChargingStation
                         }
                         else
                         {
-                            Console.Error.WriteLine("Missing or invalid port number after --local-app-port!");
+                            NodeProgram.Say(Console.Error, "Missing or invalid port number after --local-app-port!");
                             return 2;
                         }
                         break;
@@ -382,7 +385,7 @@ namespace cloud.charging.open.ChargingStation
                     case "--v2g-interface":
                         if (!NodeArguments.TryTakeValue(rest, ref i, out v2gInterface))
                         {
-                            Console.Error.WriteLine("Missing interface name after --v2g-interface!");
+                            NodeProgram.Say(Console.Error, "Missing interface name after --v2g-interface!");
                             return 2;
                         }
                         v2g = true;
@@ -396,7 +399,7 @@ namespace cloud.charging.open.ChargingStation
                         }
                         else
                         {
-                            Console.Error.WriteLine("Missing or invalid port number after --v2g-port!");
+                            NodeProgram.Say(Console.Error, "Missing or invalid port number after --v2g-port!");
                             return 2;
                         }
                         break;
@@ -404,7 +407,7 @@ namespace cloud.charging.open.ChargingStation
                     case "--v2g-cert":
                         if (!NodeArguments.TryTakeValue(rest, ref i, out v2gCertFile))
                         {
-                            Console.Error.WriteLine("Missing PKCS#12 file after --v2g-cert!");
+                            NodeProgram.Say(Console.Error, "Missing PKCS#12 file after --v2g-cert!");
                             return 2;
                         }
                         v2g = true;
@@ -418,7 +421,7 @@ namespace cloud.charging.open.ChargingStation
                     case "--slac-udp":
                         if (!NodeArguments.TryTakeValue(rest, ref i, out slacUDP))
                         {
-                            Console.Error.WriteLine("Missing endpoint after --slac-udp!");
+                            NodeProgram.Say(Console.Error, "Missing endpoint after --slac-udp!");
                             return 2;
                         }
                         v2g = true;
@@ -427,7 +430,7 @@ namespace cloud.charging.open.ChargingStation
                     case "--evse-id":
                         if (!NodeArguments.TryTakeValue(rest, ref i, out var parsedEVSEId))
                         {
-                            Console.Error.WriteLine("Missing identification after --evse-id!");
+                            NodeProgram.Say(Console.Error, "Missing identification after --evse-id!");
                             return 2;
                         }
                         evseId = parsedEVSEId;
@@ -464,8 +467,8 @@ namespace cloud.charging.open.ChargingStation
                     }
                     catch (Exception e)
                     {
-                        Console.Error.WriteLine($"The V2G certificate '{v2gCertFile}' could not be read: {e.Message}");
-                        Console.Error.WriteLine($"A password is taken from the environment variable {V2GCertificatePasswordVariable}.");
+                        NodeProgram.Say(Console.Error, $"The V2G certificate '{v2gCertFile}' could not be read: {e.Message}");
+                        NodeProgram.Say(Console.Error, $"A password is taken from the environment variable {V2GCertificatePasswordVariable}.");
                         return 2;
                     }
                 }
@@ -474,7 +477,7 @@ namespace cloud.charging.open.ChargingStation
 
                 if (slacUDP is not null && !IPEndPoint.TryParse(slacUDP, out slacEndpoint))
                 {
-                    Console.Error.WriteLine($"'{slacUDP}' is not an address and port, e.g. 127.0.0.1:9000 or 127.0.0.1:0!");
+                    NodeProgram.Say(Console.Error, $"'{slacUDP}' is not an address and port, e.g. 127.0.0.1:9000 or 127.0.0.1:0!");
                     return 2;
                 }
 
