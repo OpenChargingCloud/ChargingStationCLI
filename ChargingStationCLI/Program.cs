@@ -26,6 +26,7 @@ using cloud.charging.open.ChargingStation.CommandLine;
 using cloud.charging.open.ChargingStation.ISO15118;
 
 using cloud.charging.open.protocols.WWCP.Node;
+using cloud.charging.open.protocols.WWCP.Node.Certificates;
 using cloud.charging.open.protocols.WWCP.Node.CommandLine;
 using cloud.charging.open.protocols.WWCP.Node.Configuration;
 
@@ -211,6 +212,40 @@ namespace cloud.charging.open.ChargingStation
                    : Problem.Whose == ChargingStation.AppPort
                          ? "--local-app-port"
                          : null;
+
+        #endregion
+
+        #region (private static) OpensOnlyWithAPassword(File)
+
+        /// <summary>
+        /// Whether the file given as the V2G certificate is a PKCS#12 that opens
+        /// only with a password, as the certificate store tells it; false where
+        /// the file cannot be read at all, which the loader has said already.
+        /// </summary>
+        /// <remarks>
+        /// A PEM whose key is encrypted opens only with a password too, and
+        /// then not here, where only a PKCS#12 is read: told to give its
+        /// password, somebody would give it and be refused all the same. So a
+        /// PEM is left to what the loader says of it.
+        /// </remarks>
+        private static Boolean OpensOnlyWithAPassword(String File)
+        {
+
+            try
+            {
+
+                var content = System.IO.File.ReadAllBytes(File);
+
+                return content.AsSpan().IndexOf("-----BEGIN "u8) < 0 &&
+                       CertificateStore.OpensOnlyWithAPassword(content);
+
+            }
+            catch
+            {
+                return false;
+            }
+
+        }
 
         #endregion
 
@@ -458,19 +493,45 @@ namespace cloud.charging.open.ChargingStation
 
                 if (v2gCertFile is not null)
                 {
+
+                    // Asked first, as every node asks a file to import: the
+                    // loader said "Error occurred during a cryptographic
+                    // operation" of a file that is not there.
+                    if (!File.Exists(v2gCertFile))
+                    {
+                        NodeProgram.Say(Console.Error, $"--v2g-cert: there is no file '{v2gCertFile}'.");
+                        return 2;
+                    }
+
+                    var v2gCertPassword = Environment.GetEnvironmentVariable(V2GCertificatePasswordVariable);
+
                     try
                     {
                         v2gCertificate = X509CertificateLoader.LoadPkcs12FromFile(
                                              v2gCertFile,
-                                             Environment.GetEnvironmentVariable(V2GCertificatePasswordVariable)
+                                             v2gCertPassword
                                          );
                     }
                     catch (Exception e)
                     {
-                        NodeProgram.Say(Console.Error, $"The V2G certificate '{v2gCertFile}' could not be read: {e.Message}");
-                        NodeProgram.Say(Console.Error, $"A password is taken from the environment variable {V2GCertificatePasswordVariable}.");
+
+                        // Given no password, .NET speaks of "the provided password,
+                        // the password may be incorrect". A file that opens only
+                        // with one is said to, and where the password goes.
+                        if (v2gCertPassword is not { Length: > 0 } && OpensOnlyWithAPassword(v2gCertFile))
+                            NodeProgram.Say(Console.Error, $"The V2G certificate '{v2gCertFile}' opens only with a password, and none was given. " +
+                                                           $"Give it in the environment variable {V2GCertificatePasswordVariable}.");
+
+                        else
+                        {
+                            NodeProgram.Say(Console.Error, $"The V2G certificate '{v2gCertFile}' could not be read: {e.Message}");
+                            NodeProgram.Say(Console.Error, $"A password is taken from the environment variable {V2GCertificatePasswordVariable}.");
+                        }
+
                         return 2;
+
                     }
+
                 }
 
                 IPEndPoint? slacEndpoint = null;
