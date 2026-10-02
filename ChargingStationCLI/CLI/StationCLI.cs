@@ -19,6 +19,8 @@
 
 using System.Reflection;
 
+using org.GraphDefined.Vanaheimr.CLI;
+
 using cloud.charging.open.protocols.WWCP.Node.CommandLine;
 
 #endregion
@@ -68,6 +70,29 @@ namespace cloud.charging.open.ChargingStation.CommandLine
                           params Assembly[]  AssembliesWithCLICommands)
 
             : base(Station, AssembliesWithCLICommands)
+
+        {
+
+            this.Station = Station;
+
+            RegisterCLIType(typeof(StationCLI));
+
+        }
+
+        /// <summary>
+        /// Create the command line of the given ChargingStation on the given terminal,
+        /// for the given caller - a session over SSH.
+        /// </summary>
+        /// <param name="Station">The running ChargingStation.</param>
+        /// <param name="Terminal">What the command line is typed at and written on.</param>
+        /// <param name="Caller">Who is typing at it.</param>
+        /// <param name="AssembliesWithCLICommands">Further assemblies to search for commands. This one and the node's are searched either way.</param>
+        public StationCLI(ChargingStation    Station,
+                          ICLITerminal       Terminal,
+                          CLICaller          Caller,
+                          params Assembly[]  AssembliesWithCLICommands)
+
+            : base(Station, Terminal, Caller, AssembliesWithCLICommands)
 
         {
 
