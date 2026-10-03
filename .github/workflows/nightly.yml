@@ -135,6 +135,25 @@ jobs:
         timeout-minutes: 120
         run: dotnet test ChargingStationCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts
 
+      # The tests of WWCP_OCPP, which the solution does not hold: the station
+      # builds two of WWCP_OCPP's libraries, not their tests, and no CI of
+      # WWCP_OCPP's own runs them either. They are where a change to how Styx
+      # reads an optional JSON value meets an OCPP message. On 2026-10-03, with
+      # Styx 3ac5a72c, WWCP_OCPP 6d12a827 refused every SetChargingProfile
+      # with a phaseToUse and every SetNetworkProfile with an APN, and only
+      # these tests said so. !cancelled(), so that a red suite above does
+      # not keep them from running; both projects run, and either one red
+      # makes the step red.
+      - name: The OCPP tests, as pinned
+        if: ${{ !cancelled() }}
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          rc=0
+          dotnet test libs/WWCP_OCPP/WWCP_OCPPv1.6_Tests/WWCP_OCPPv1.6_Tests.csproj --configuration Release --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}-ocpp16.trx" --results-directory artifacts || rc=1
+          dotnet test libs/WWCP_OCPP/WWCP_OCPPv2.1_Tests/WWCP_OCPPv2.1_Tests.csproj --configuration Release --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}-ocpp21.trx" --results-directory artifacts || rc=1
+          exit $rc
+
       # The same start as in ci.yml, for the same reason and on the same leg.
       # Repeating it costs a minute and catches the kind of failure that only
       # shows up when nobody pushed: a dependency resolved at restore time that
@@ -362,6 +381,19 @@ jobs:
         continue-on-error: true
         timeout-minutes: 120
         run: dotnet test ChargingStationCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --logger "console;verbosity=normal"
+
+      # The OCPP tests as well, which the solution does not hold - see the
+      # pinned job.
+      - name: The OCPP tests against the tips (informational)
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          rc=0
+          dotnet test libs/WWCP_OCPP/WWCP_OCPPv1.6_Tests/WWCP_OCPPv1.6_Tests.csproj --configuration Release --logger "console;verbosity=normal" || rc=1
+          dotnet test libs/WWCP_OCPP/WWCP_OCPPv2.1_Tests/WWCP_OCPPv2.1_Tests.csproj --configuration Release --logger "console;verbosity=normal" || rc=1
+          exit $rc
 
       - name: Say how it went
         if: ${{ !cancelled() }}
