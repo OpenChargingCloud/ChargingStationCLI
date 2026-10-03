@@ -209,12 +209,13 @@ jobs:
       # a port of its own and no sign-in to ask about. V2G stays off, as it is
       # unless asked for: SLAC needs a powerline modem.
       #
-      # Three questions are asked of it. "/" must come back as the embedded web
+      # Four questions are asked of it. "/" must come back as the embedded web
       # interface. "/api/v1/status" must come back 401, because the JSON API of
       # a charging station is nobody's business until somebody has signed in —
       # a 200 there would mean the door had come off. "/api/v1/clock" must come
       # back 401 as well, and for one more reason: an unknown path under /api
       # answers 404, so a 401 is also what proves the route is there at all.
+      # And its command line must answer over SSH, on the port given it.
       - name: The station starts and answers (Debian)
         if: matrix.leg == 'debian-13-container'
         timeout-minutes: 5
@@ -224,6 +225,7 @@ jobs:
           tmp="$(mktemp -d)"
           dotnet ChargingStationCLI/bin/Release/net10.0/ChargingStationCLI.dll \
               --port      18126 \
+              --ssh-port  22126 \
               --accounts  "$tmp/accounts" \
               --config    "$tmp/configuration.json" \
               --log-file  "$tmp/logs" \
@@ -254,6 +256,15 @@ jobs:
           clock="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18126/api/v1/clock 2>/dev/null || true)"
           clock="${clock:-000}"
 
+          # Its command line over SSH, on a port of its own: without
+          # --ssh-port it would be the web port plus 20000, 38126 - inside
+          # the range Linux hands outgoing connections their ports from
+          # (32768-60999), where EMSPCLI found it taken in a Debian container
+          # (run cb2a299). 22126 is below that, below the 49152 of Windows,
+          # and clear of the defaults 22347-22353. An SSH server speaks first,
+          # so its first line is its banner.
+          ssh_banner="$(timeout 5 bash -c 'exec 3<>/dev/tcp/127.0.0.1/22126 && head -n 1 <&3' 2>/dev/null | tr -d '\r' || true)"
+
           # Asked before it is stopped, so that the answer below means something.
           running=0
           kill -0 "$pid" 2>/dev/null && running=1
@@ -264,6 +275,7 @@ jobs:
           echo "GET /                -> $root"
           echo "GET /api/v1/status   -> $api"
           echo "GET /api/v1/clock    -> $clock"
+          echo "SSH 22126            -> ${ssh_banner:-nothing}"
 
           # What the banner says this was built from - in every run, not only a
           # red one, because a stamp that reads "unknown" or "-dirty" is worth
@@ -286,6 +298,10 @@ jobs:
               echo "The clock answered $clock where 401 was expected: a 404 means the route has gone missing, a 200 that it is open to anyone."
               fault=1
           fi
+          case "$ssh_banner" in
+              SSH-2.0-*) ;;
+              *) echo "The SSH server did not answer on 22126."; fault=1 ;;
+          esac
 
           if [ "$fault" != 0 ]; then
               echo
