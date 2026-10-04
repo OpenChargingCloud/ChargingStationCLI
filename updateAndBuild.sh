@@ -19,5 +19,6 @@ git pull --ff-only
 git submodule update --init --recursive
 git submodule foreach git checkout master
 git submodule foreach git pull
-npm --prefix /home/ahzf/ChargingStationCLI/libs/EV/EV/Frontend ci
+npm --prefix /home/ahzf/ChargingStationCLI/libs/ChargingStation/ChargingStation/Frontend ci
+#dotnet build ChargingStationCLI.slnx --configuration Release
 dotnet build ChargingStationCLI.slnx
