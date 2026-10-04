@@ -192,9 +192,16 @@ jobs:
       # The station's own tests. Nowhere else runs them — libs/ChargingStation
       # has no workflow of its own, by design: it is not built alone, it is
       # built here.
+      #
+      # A test that has not finished after five minutes is taken for hung: the
+      # longest takes 8 s, and the longest any of them waits for something is
+      # 30 s. The run then stops, names the test, and leaves a minidump of the
+      # test host beside the results. Without that a hang ran into the step's
+      # timeout and said nothing but the last test that had finished - twice
+      # on Windows, at 2448dc6 and at 5f322bb.
       - name: Test the station
         timeout-minutes: 30
-        run: dotnet test libs/ChargingStation/ChargingStationTests/ChargingStationTests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts
+        run: dotnet test libs/ChargingStation/ChargingStationTests/ChargingStationTests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts --blame-hang-timeout 5m --blame-hang-dump-type mini
 
       # The question no unit test in this repository asks: does it start?
       # Everything that only happens at startup happens here — the assemblies of
@@ -329,4 +336,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.leg }}
-          path: artifacts/*.trx
+          # With what a hang left behind: the test host's minidump, and the
+          # order the tests ran in up to it.
+          path: |
+            artifacts/*.trx
+            artifacts/**/*.dmp
+            artifacts/**/Sequence_*.xml
