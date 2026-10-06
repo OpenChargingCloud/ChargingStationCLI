@@ -125,16 +125,38 @@ machine, no files, no tunnels. `--ssh-port` moves it, `--no-ssh` switches it
 off.
 
 Whoever signs in is an account of the charging station, under its name, with a
-key of its own. The first start makes `root`; give it your public key once:
+key of its own. The first start makes `root`; give it your public key with
+that very start - the way recommended:
 
 ```
 dotnet run --project ChargingStationCLI -- --authorize-ssh-key root=C:\Users\you\.ssh\id_ed25519.pub
 ```
 
+The private key then stays on your machine, and no console ever shows it.
+A first start without `--authorize-ssh-key root=...` makes up a key pair for
+`root` instead and prints its private key once: the first-start box names its
+fingerprint below the password, and the key follows the box, at the start of
+its lines. Save the lines from `-----BEGIN OPENSSH PRIVATE KEY-----` to the
+END line as a file only you can read, and sign in with
+`ssh -i <file> -p 22348 root@127.0.0.1`, or import the file in PuTTYgen for
+PuTTY. Like the password it is kept nowhere - but a console may be kept, by a
+service's journal or a redirected output; replace it with your own key and
+take it out. `--authorize-ssh-key` also works at any later start.
+
 An OpenSSH `.pub` goes in as it is, and so does what PuTTYgen saves with *Save
-public key*. The key is kept in `accounts/ssh/root`, a file in the format of
-`authorized_keys`, and putting a line into it by hand does the same; taking one
-out locks that key out at once. Then:
+public key*. The key is kept with the account, beside its password, and the
+`sshKeys` command manages it - at the console, or over SSH for the account
+signed in:
+
+```
+sshKeys root
+sshKeys root add ssh-ed25519 AAAA... you@laptop
+sshKeys root remove SHA256:abc
+```
+
+`remove` takes the fingerprint `sshKeys` lists, or enough of its beginning, and
+locks that key out at once. `apiKeys` does the same for the account's API keys,
+and shows a new one once, when it is made. Then:
 
 ```
 ssh -p 22348 root@127.0.0.1
