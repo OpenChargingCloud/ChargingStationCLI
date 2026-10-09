@@ -223,7 +223,8 @@ is up.
 
 ### The local app
 
-Besides the web interface on port 2348 and the display on 2349, the program
+Besides the web interface on port 2348 and the display on 2349 (or the port set
+on Configuration - Display), the program
 opens a third server, for an app on a phone in the station's own network:
 `http://127.0.0.1:2350/`, with `POST /localStart`, `POST /localStop/{SessionId}`
 and the WebSocket `/localApp`. A card's UID starts a charge there as it would at
