@@ -88,9 +88,10 @@ namespace cloud.charging.open.ChargingStation
                 "Display:",
 
                 .. NodeUsage.Switch("--kiosk-port <n>",     "the TCP port of the display, the page for the screen on the front of the " +
-                                                           $"station (default: {ChargingStation.DefaultKioskPort}). Its own server on its own " +
-                                                            "port, so that it and the web interface can be bound to different addresses. " +
-                                                            "There is no sign-in on it."),
+                                                            "station (default: the port set on Configuration > Display, else " +
+                                                           $"{ChargingStation.DefaultKioskPort}; this switch wins over that for this start). " +
+                                                            "Its own server on its own port, so that it and the web interface can be bound " +
+                                                            "to different addresses. There is no sign-in on it."),
 
                 .. NodeUsage.Switch("--no-kiosk",           "do not listen for the display at all."),
 
