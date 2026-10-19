@@ -70,7 +70,7 @@ namespace cloud.charging.open.ChargingStation
             DefaultPort:           ChargingStation.DefaultHTTPPort,
             FrontendSources:       "libs/ChargingStation/ChargingStation/Frontend",
 
-            ConfigurationSays:     "where the name servers, the time servers, the EVSEs, the power limits and the calibration " +
+            ConfigurationSays:     "where the name servers, the groups of time servers, the EVSEs, the power limits and the calibration " +
                                   $"certificates of this station live (default: {WWCPConfigFile.DefaultFileName} below the " +
                                    "repository root). Without the file the station has one 22 kW type 2 socket and the system " +
                                    "defaults; the Configuration pages of the web interface write it, and every change there " +
