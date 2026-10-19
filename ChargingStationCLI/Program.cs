@@ -345,6 +345,24 @@ namespace cloud.charging.open.ChargingStation
 
         #endregion
 
+        #region (private static) TheMeters(Station)
+
+        /// <summary>
+        /// Where the meter of each EVSE that has one read is read. Not whether
+        /// it answered: it is read in a loop of its own, and the first answer
+        /// comes after the start has been said - the log says how it went.
+        /// </summary>
+        private static IEnumerable<(String Label, String Value)> TheMeters(ChargingStation Station)
+        {
+
+            foreach (var evse in Station.EVSEs)
+                if (evse.MeterEndpoint is { } endpoint)
+                    yield return ($"Meter {evse.PhysicalReference ?? evse.Id.ToString()}", $"{endpoint}, over Modbus/TLS");
+
+        }
+
+        #endregion
+
 
         public static async Task<Int32> Main(String[] Arguments)
         {
@@ -647,7 +665,7 @@ namespace cloud.charging.open.ChargingStation
 
                 foreach (var line in station.Banner(BesideTheInterfaces:  BesideTheWebInterface(station),
                                                     OfTheKind:            OfTheStation(station),
-                                                    AfterTheTimeServers:  BelowTheCable(station)))
+                                                    AfterTheTimeServers:  BelowTheCable(station).Concat(TheMeters(station))))
                     Console.WriteLine(line);
 
                 #endregion
