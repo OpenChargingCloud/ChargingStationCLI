@@ -356,8 +356,8 @@ namespace cloud.charging.open.ChargingStation
         {
 
             foreach (var evse in Station.EVSEs)
-                if (evse.MeterEndpoint is { } endpoint)
-                    yield return ($"Meter {evse.PhysicalReference ?? evse.Id.ToString()}", $"{endpoint}, over Modbus/TLS");
+                if (Station.MetersFile.MeterOf(evse.Id) is { } meter)
+                    yield return ($"Meter {evse.PhysicalReference ?? evse.Id.ToString()}", $"{meter.Endpoint}, over Modbus/TLS");
 
         }
 
