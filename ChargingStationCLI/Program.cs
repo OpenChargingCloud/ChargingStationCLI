@@ -298,33 +298,48 @@ namespace cloud.charging.open.ChargingStation
         #region (private static) BelowTheCable(Station)
 
         /// <summary>
-        /// What is on the wire below the charging cable.
+        /// What is on the wire below each charging cable.
         /// </summary>
         private static IEnumerable<(String Label, String Value)> BelowTheCable(ChargingStation Station)
         {
 
+            var switchedOn = Station.EVSEs.Where(evse => Station.V2GOptionsOf(evse.Id).Enabled).ToArray();
+
             // Said even when there is nothing to say, because "the V2G lines
             // are missing" and "V2G is off" look identical on a console and
             // only one of them is a thing somebody configured.
-            if (Station.V2G is not { } link)
+            if (switchedOn.Length == 0)
             {
-                yield return ("V2G", Station.V2GOptions.Enabled
-                                         ? "switched on, but nothing came up - see the log"
-                                         : "switched off");
+                yield return ("V2G", "switched off");
                 yield break;
             }
 
-            // Which interface, and what made it that one, on a line of its own
-            // rather than in a parenthesis behind SDP: on a machine with two of
-            // them this is the first thing somebody checks, and the reason is
-            // the half that saves the afternoon.
-            yield return ("V2G interface",  link.InterfaceChoice ?? "none");
+            foreach (var evse in switchedOn)
+            {
 
-            yield return ("V2G endpoint",   (link.V2GEndpoint?.ToString() ?? "not listening") +
-                                            (link.V2GEndpoint is not null ? link.UsesTLS ? ", TLS 1.3" : ", plain TCP" : ""));
+                // "V2G A endpoint", where there is more than one cable to say it
+                // of; as it always was where there is one.
+                var of = Station.EVSEs.Count > 1 ? $" {evse.PhysicalReference ?? evse.Id.ToString()}" : "";
 
-            yield return ("SDP",            link.SDPRunning  ? "answering" : "not running");
-            yield return ("SLAC",           link.SLACRunning ? "listening" : "not running");
+                if (Station.V2GLinkOf(evse.Id) is not { } link)
+                {
+                    yield return ($"V2G{of}", "switched on, but nothing came up - see the log");
+                    continue;
+                }
+
+                // Which interface, and what made it that one, on a line of its own
+                // rather than in a parenthesis behind SDP: on a machine with two of
+                // them this is the first thing somebody checks, and the reason is
+                // the half that saves the afternoon.
+                yield return ($"V2G{of} interface",  link.InterfaceChoice ?? "none");
+
+                yield return ($"V2G{of} endpoint",   (link.V2GEndpoint?.ToString() ?? "not listening") +
+                                                     (link.V2GEndpoint is not null ? link.UsesTLS ? ", TLS 1.3" : ", plain TCP" : ""));
+
+                yield return ($"SDP{of}",            link.SDPRunning  ? "answering" : "not running");
+                yield return ($"SLAC{of}",           link.SLACRunning ? "listening" : "not running");
+
+            }
 
         }
 
