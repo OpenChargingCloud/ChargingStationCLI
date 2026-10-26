@@ -131,9 +131,20 @@ jobs:
       # runner is not a normal client — datacentre egress on UDP/53 and UDP/123
       # is commonly blocked or rate-limited — so they would fail here for
       # reasons that say nothing about any of this code.
+      #
+      # A test that has not finished after ten minutes is taken for hung, as in
+      # the gate's run of the station's tests: the run then stops, names the
+      # test, and leaves a minidump of its test host beside the results. Ten
+      # rather than five, because Hermod's suite is in here too. Without it a
+      # hang ran into the step's timeout and said nothing - on Windows on
+      # 2026-10-23, -25 and -26, in the station's tests each time, at a
+      # different test each time. A prefix rather than a file name for the trx:
+      # the logger then names each test project's file after the second it
+      # began, where one file name was overwritten by every project after the
+      # first and what was uploaded was whichever finished last.
       - name: Test everything, as pinned
         timeout-minutes: 120
-        run: dotnet test ChargingStationCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts
+        run: dotnet test ChargingStationCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --logger "console;verbosity=normal" --logger "trx;LogFilePrefix=${{ matrix.leg }}" --results-directory artifacts --blame-hang-timeout 10m --blame-hang-dump-type mini
 
       # The tests of WWCP_OCPP, which the solution does not hold: the station
       # builds two of WWCP_OCPP's libraries, not their tests, and no CI of
@@ -286,7 +297,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.leg }}
-          path: artifacts/*.trx
+          path: |
+            artifacts/*.trx
+            artifacts/**/*.dmp
+            artifacts/**/Sequence_*.xml
 
 
   # ---------------------------------------------------------------------------
@@ -376,11 +390,13 @@ jobs:
         continue-on-error: true
         run: dotnet build ChargingStationCLI.slnx --configuration Release
 
+      # A hung test named after ten minutes, as in the pinned job, but without
+      # a dump: nothing here is uploaded.
       - name: Test against the tips (informational)
         if: steps.build.outcome == 'success'
         continue-on-error: true
         timeout-minutes: 120
-        run: dotnet test ChargingStationCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --logger "console;verbosity=normal"
+        run: dotnet test ChargingStationCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --logger "console;verbosity=normal" --blame-hang-timeout 10m --blame-hang-dump-type none
 
       # The OCPP tests as well, which the solution does not hold - see the
       # pinned job.
