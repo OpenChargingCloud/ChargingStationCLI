@@ -636,7 +636,13 @@ namespace cloud.charging.open.ChargingStation
                               ConsoleLogLevel:   arguments.ConsoleLogLevel,
                               LogPath:           arguments.LogPathBelow(root),
                               BridgeDebugLog:    !arguments.NoTrace,
-                              SSH:               arguments.SSH
+                              SSH:               arguments.SSH,
+
+                              // --https, --https-cert, --redirect-port and
+                              // --trusted-proxy, over the "web" section of the
+                              // configuration file. Not passed on, a start with
+                              // any of them is refused - see ImportCertificates.
+                              Web:               arguments.Web
 
                           );
             }

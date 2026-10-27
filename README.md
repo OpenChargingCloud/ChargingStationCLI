@@ -221,6 +221,30 @@ node's switches, read by WWCP_Node, as is what the console says once the station
 is up.
 
 
+### Reached over the network
+
+On the loopback, as by default, plain HTTP is fine: whoever reaches it is on
+the machine already. With `--any` the sign-in's password, every API key and
+the session cookie cross the network, and in the clear unless one of two
+things is said. Either HTTPS of the station's own:
+
+```
+dotnet run --project ChargingStationCLI -- --any --https --import-certificate tlsServerIdentity=C:\certs\station.p12
+```
+
+`--https` shows the store's TLS server identity, which `--import-certificate`
+puts there at the same start, or the **Server identities** page later;
+`--https-cert fullchain.pem --https-key privkey.pem` reads certbot's files
+instead, again whenever they change, and `--redirect-port 80` adds a port that
+only sends browsers to HTTPS. Or a reverse proxy in front that does the HTTPS,
+named with `--trusted-proxy 127.0.0.1` (as often as there are proxies): then the
+client the proxy names is who the log and the sign-in's ration of guesses see,
+and the session cookie is a secure one where the proxy says its leg was HTTPS.
+The `web` section of the configuration file says the same without switches;
+the switches win over it. Neither said, the station warns in its log, below its
+banner, and above every page to its administrators.
+
+
 ### The local app
 
 Besides the web interface on port 2348 and the display on 2349 (or the port set
