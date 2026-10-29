@@ -374,7 +374,11 @@ The alternatives that were weighed:
 
 ### B.16 Side findings (outside NTS, but in the running station program)
 
-- `AChargingStationNode` registers `SecurityCtrlr` with the hard-coded `Identity "CS001"` and `BasicAuthPassword "s3cur3!"`.
-- GetVariables (`TestChargingStationNode`) does not check `WriteOnly` and returns `BasicAuthPassword` in plain text.
-- `TestChargePointNode` (1.6) creates test keys, among them `password = "12345678"` (WriteOnly). GetConfiguration also returns WriteOnly values, and ChangeConfiguration creates any unknown key as ReadWrite.
-- InstallCertificate stores certificates even on `Rejected`. SetNetworkProfile is accepted and discarded.
+Fixed in WWCP_OCPP 5afa19e0 (2026-10-29), each with a test, for the battery swap station as well:
+
+- `AChargingStationNode` registered `SecurityCtrlr` with the hard-coded `Identity "CS001"` and `BasicAuthPassword "s3cur3!"`. The identity is now the node's id, and there is no password until one is set.
+- GetVariables (`TestChargingStationNode`) did not check `WriteOnly` and returned `BasicAuthPassword` in plain text. A WriteOnly variable is now `Rejected`, with no value.
+- `TestChargePointNode` (1.6) created test keys, among them `password = "12345678"` (WriteOnly). GetConfiguration returned WriteOnly values, and ChangeConfiguration created any unknown key as ReadWrite. The node now has only the keys its caller passes (`ConfigurationKeys`), GetConfiguration lists a WriteOnly key without its value, and an unknown key is `NotSupported`.
+- InstallCertificate stored certificates even on `Rejected`, so a rejected one replaced the one installed before. Only an accepted certificate is stored now.
+
+Still open: SetNetworkProfile is accepted and discarded.
