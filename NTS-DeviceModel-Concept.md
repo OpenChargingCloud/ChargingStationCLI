@@ -115,15 +115,15 @@ CLTS is mostly about the **server and governance side** (PTB as the provider). O
 11. Settle the log target per group uniformly: legal → metrological log, otherwise the security log. Today the v2.x group table and the v1.6 table for `local` contradict each other.
 12. `MaxErrors`: define how the restriction becomes **visible**, e.g. as a read-only variable `Limited` plus NotifyEvent/SecurityEvent.
 13. Name `Enabled` per group and per client through the OCPP standard variable `Enabled`; in v1.6 `ntp.<group>.enabled` instead of the global `ntp.enabled`.
-14. Adding and removing groups: the Device Model has no way to create instances through SetVariables. The paper must say how instances come into existence (see B.7). It should also state that a client belongs to exactly one group (1:n, B.5).
+14. Adding and removing groups: the Device Model has no way to create instances through SetVariables. The paper must say how instances come into existence: through `NTPController.ClientGroups`, as decided on 2026-10-29 (B.7, B.14 point 3). It should also state that a client belongs to exactly one group (1:n, B.5).
 15. `RootCAs`: add pins (`CertificatePins`, `RootPins`, `OnPinMismatch`, `TrustOnFirstUse`), or state clearly that `RootCAs` means the `certificateGroup` of InstallCertificate. Part B maps both this way.
 16. `MinRefresh`/`MaxRefresh`: settle on **one** unit (seconds). Today v2.x says "seconds" and v1.6 "days" with 30/60, while the implementation works with 30 minutes. Justify the defaults.
 17. `DelayAsymmetry`: the JSON type "Integer" does not fit the example −0.05 ms, so it should be Decimal.
 18. `Mode` for the legal group: NTPv4 is not "may be prohibited" but **MUST NOT**; only NTSv4 or NTPv4TLS (SMGW) are allowed.
 19. Describe the verifying architecture (A.4 point 1) as an admissible variant.
 20. CLTS §5.1.3: The decision rules refer to fields (`reports.overall_level`, `status.quorum_agreement.ok`, `status.health.level`) that are defined nowhere. The policy JSON needs an `id` field that matches `id=` in the TXT record.
-21. The **relation to the standard `ClockCtrlr`** is missing. OCPP 2.x already has `ClockCtrlr` with `TimeSource`, `NtpSource`, `NtpServerUri[n]` and `TimeAdjustmentReportingThreshold`. The paper must say how the NTP client groups relate to it: the legal group feeds `ClockCtrlr` (see B.6), and `TimeAdjustmentReportingThreshold` is the 5 s threshold from §2.2.
-22. **Paper and reference implementation drift apart.** In WWCP_OCPP, `Mode` defaults to `NTPv4` unless an NTS-KE host is set; the paper says `NTSv4`. The group controller carries ClockCtrlr variables (`TimeOffset`, `TimeZone`, `NextTimeOffsetTransition…`) and has `MaxLogging` instead of `MaxErrors`. The names end in `…Controller` instead of the OCPP-customary `…Ctrlr`. Almost all paper variables are only C# properties there, not Device Model variables. Settle both sides together (B.3).
+21. The **relation to the standard `ClockCtrlr`** is missing. OCPP 2.x already has `ClockCtrlr` with `TimeSource`, `NtpSource`, `NtpServerUri[n]` and `TimeAdjustmentReportingThreshold`. The paper must say how the NTP client groups relate to it: the legal group feeds `ClockCtrlr`, writes to `NtpServerUri[k]` change the legal group (see B.6), and `TimeAdjustmentReportingThreshold` is the 5 s threshold from §2.2.
+22. **Paper and reference implementation drift apart.** In WWCP_OCPP, `Mode` defaults to `NTPv4` unless an NTS-KE host is set; the paper says `NTSv4`. The group controller carries ClockCtrlr variables (`TimeOffset`, `TimeZone`, `NextTimeOffsetTransition…`) and has `MaxLogging` instead of `MaxErrors`. The names end in `…Controller` instead of the OCPP-customary `…Ctrlr`; on 2026-10-29 it was decided to keep `…Controller` and to call the new top component `NTPController` (B.14 point 2), so the paper adopts these names. Almost all paper variables are only C# properties there, not Device Model variables. Settle both sides together (B.3).
 
 **Editorial**
 
@@ -155,7 +155,7 @@ Dependencies: WWCP_Node stays free of OCPP, because it serves every CLI (roaming
                          │                            │            │
           file nts.groups + NTSGroup (runtime)        │            ▼
                          │                            │     WWCP_OCPP Device Model
-                         └── OnNTSGroupChanged ───────┘     (NTPCtrlr, NTPClientGroup…,
+                         └── OnNTSGroupChanged ───────┘     (NTPController, NTPClientGroup…,
                                                              NTPClient…, ClockCtrlr)
 ```
 
@@ -188,6 +188,7 @@ Dependencies: WWCP_Node stays free of OCPP, because it serves every CLI (roaming
 7. **Certificates** through an exchangeable store interface instead of `ConcurrentDictionary<InstallCertificateUse, Certificate>`: InstallCertificate, GetInstalledCertificateIds and DeleteCertificate, several certificates per type, `certificateGroup` passed through, nothing stored on `Rejected`.
 8. **Fix the lookup bug** in `AOCPPNetworkingNode` (lines 122 and 151).
 9. **1.6**: make configuration keys registrable with a getter and setter (like `VariableConfig`). Unknown keys ⇒ `NotSupported`.
+10. **Remove the placeholders** `NTSCtrlr` and `NTSServerCtrlr` (`WWCP_OCPPv2.1_ChargingStation/Components/Logical/NTS/`). They are copies of `AuthCtrlr` without NTS variables; `NTPController`, `NTPClientGroupController` and `NTPClientController` replace them (B.14 point 2).
 
 Because only the first subscriber is dispatched, these hooks must sit **inside** the handlers of `TestChargingStationNode`/`TestChargePointNode`. An additional handler in the station is not enough.
 
@@ -195,7 +196,7 @@ Because only the first subscriber is dispatched, these hooks must sit **inside**
 
 1. **Change events**: `OnNTSGroupChanged(NTSGroup, IReadOnlyList<String> Changes, String Origin)`, `OnNTSGroupAdded`, `OnNTSGroupRemoved`. Today there are only `OnNTSGroupLimited` and `EventLog.OnLogged`, and parsing log lines would be wrong. The natural trigger point is the end of `ApplyNTSConfiguration`, where `changed.Count > 0` is logged.
 2. **Origin**: an optional parameter `Origin` (`web:<account>`, `cli:<account>`, `ocpp:<CSMS id>`) for `TryUpdateNTSConfiguration`, `TryAddNTSGroup` and `TryRemoveNTSGroupAsync`. The log line "NTS configuration changed: …" then names it. STS §3 requires logging *every* change, and as evidence one also needs *who* made it.
-3. **Stable server id**: an optional field `"id"` per server entry, unique across the whole node, with the syntax of group ids. It is the instance of `NTPClientController`. The web page must send `id` back with the server list, as it does today with `pinsAsShown`. Entries without `id` get the derived id `<group>-<n>`. The bridge fixes it in the file on the first OCPP write to the group, not at start.
+3. **Stable server id** (decided, B.14 point 4): an optional field `"id"` per server entry, unique across the whole node, with the syntax of group ids. It is the instance of `NTPClientController`. The web page must send `id` back with the server list, as it does today with `pinsAsShown`. Entries without `id` get the derived id `<group>-<n>`. The bridge fixes it in the file on the first OCPP write to the group, not at start.
 4. **Several groups at once** for ACID: `TryUpdateNTSConfigurations(IEnumerable<(NTSGroup, JObject)>, Origin)`. All patches are applied to **one** document that was read once, checked once (`NTSSection.TryParse`), written once and then applied. `TryWriteNTSSection` already works with "one read, one write"; this only extends it to several groups.
 5. **Pass AEAD through** (small): Norn has `NTSServerEndpoint.OfferedAEADAlgorithms`; the node needs the field `aead` per server and has to pass it on in `ToEndpoint()`.
 6. **A reporting threshold for offsets** (legal only): `offsetReportingThresholdSeconds`, the target of `ClockCtrlr.TimeAdjustmentReportingThreshold` (B.6).
@@ -205,8 +206,8 @@ Because only the first subscriber is dispatched, these hooks must sit **inside**
 | OCPP component | Instance | In the node | Life cycle |
 |---|---|---|---|
 | `ClockCtrlr` (standard) | none | the legal group, summarized | fixed |
-| `NTPCtrlr` *(new, extends the paper)* | none | the NTS section as a whole | fixed |
-| `NTPClientGroupController` | group id (`legal`, `local`, …) | `NTSGroup` / `nts.groups.<id>` | added and removed through `NTPCtrlr.ClientGroups` |
+| `NTPController` *(new, extends the paper)* | none | the NTS section as a whole | fixed |
+| `NTPClientGroupController` | group id (`legal`, `local`, …) | `NTSGroup` / `nts.groups.<id>` | added and removed through `NTPController.ClientGroups` |
 | `NTPClientController` | stable server id (B.4 point 3) | one entry in `servers[]` | added and removed through `NTPClientGroupController[g].Clients` |
 
 **1:n instead of n:m.** A client belongs to exactly one group, and the bridge refuses an id in two groups. The reasons: `Priority` is only relative within one group, the quorum and the error counters belong to the group, and the node is built this way. If the same server should be in two groups, it gets two entries with different ids; they share cookies and pins through the host name anyway. The paper should switch to 1:n.
@@ -215,18 +216,28 @@ Because only the first subscriber is dispatched, these hooks must sit **inside**
 
 ### B.6 The standard `ClockCtrlr`
 
-A standard CSMS knows only `ClockCtrlr`. The bridge fills it from the legal group, so even a CSMS without the NTS extension sees where the time comes from.
+A standard CSMS knows only `ClockCtrlr`. The bridge fills it from the legal group, so even a CSMS without the NTS extension sees where the time comes from, and it takes writes to `NtpServerUri` into the legal group.
 
 | Variable | Mutability | Node | Note |
 |---|---|---|---|
 | `DateTime` | ro | `TimeProvider.GetUtcNow()` | |
 | `TimeSource` | rw (standard) | `NTP,RealTimeClock` while `legal` is enabled, otherwise `RealTimeClock` | Only the current value is accepted; anything else ⇒ `Rejected`. The NTS configuration determines the source. |
 | `NtpSource` | ro | `manual` | |
-| `NtpServerUri[1…n]` | ro | the enabled servers of the legal group, in query order | written only through `NTPClientController` (open decision B.14 point 5) |
+| `NtpServerUri[1…9]` | rw | the enabled servers of the legal group, in query order | by position, see below (B.14 point 5) |
 | `TimeAdjustmentReportingThreshold` | rw | `offsetReportingThresholdSeconds` (B.4 point 6) | When a check finds an offset ≥ the threshold ⇒ `SecurityEventNotification` `SettingSystemTime` with the offset as `techInfo`. This is the 5 s value from STS §2.2. |
 | `TimeOffset`, `TimeZone`, `NextTimeOffsetTransition…` | n/a | n/a | not an NTS matter; stays as it is |
 
-### B.7 Variables: `NTPCtrlr`
+**Writing `NtpServerUri`** (decided on 2026-10-29, B.14 point 5). OCPP makes the variable's instance a single digit, the NTP priority (1 = highest). The node has priorities 0…255 and asks servers of equal priority together, as one band, and Norn requires *each band on its own* to reach the quorum (`TimeSourceGroup.Measure`). An index of its own per server would make bands of one server that never reach a quorum of 2. The index therefore stands for the position in query order:
+
+- **Reading**: `[k]` is the k-th enabled server of the legal group in query order (priority, then file order). Up to nine are shown. When fewer than nine are enabled, the report also lists the next free index `[n+1]` with an empty value, so a standard CSMS sees where a server can be added.
+- **`[k] = host` at an existing position** replaces that server's host name, and its NTS-KE port when the value is `nts://host:port`. The entry keeps its id, priority, root pins, `onMismatch` and `trustOnFirstUse`, and loses its certificate pins, which name the old server's certificate. The diff line in the metrological log shows both.
+- **`[n+1] = host`** adds a server with that host name, enabled, with the default ports, in the band of the last server (with its priority), so it counts towards the same quorum. An index beyond `n+1` ⇒ `Rejected`, with the next free index in `additionalInfo`.
+- **`[k] = ""`** removes the k-th server, and the later ones move up one index. If the node refuses, e.g. because fewer servers would be enabled than an explicit `minServers`, its sentence goes into `additionalInfo`.
+- **Values** are host names or `nts://host[:port]`, as for `NTPClientController.ServerURL`. `ntp://…` or any other scheme ⇒ `Rejected`, `InvalidValue`, because the node speaks NTS only.
+- **Consistency**: Each write is one patch through `TryUpdateNTSConfiguration`, so a standard CSMS can use `IndependentRequests`. Under ACID, `NtpServerUri` entries go into the legal group's patch together with its `NTPClientController` entries; two entries of one request that change the same server ⇒ both `Rejected`, all others `Rolledback`.
+- **What stays elsewhere**: priorities and further bands, the NTP port, pins, the quorum and any server beyond the ninth are changed through `NTPClientController` and `NTPClientGroupController`.
+
+### B.7 Variables: `NTPController`
 
 | Variable | Type | Mutability | Node | Note |
 |---|---|---|---|---|
@@ -300,7 +311,7 @@ The last case (compare-and-set) is what **really makes it irrelevant whether the
 **Depending on `DataConsistencyModel`:**
 
 - **`IndependentRequests`** (standard OCPP, without the field): every entry on its own, in request order, each with one patch, one `TryUpdateNTSConfiguration` and its own result, as the standard intends. Rules spanning several fields therefore apply per entry, and the CSMS must order the entries accordingly (enable clients first, then raise `MinServers`; the other way round when lowering). **New client ids** in `Clients` are not possible here, because a server entry needs a host name ⇒ `Rejected`, `additionalInfo`: "use DataConsistencyModel ACID". Whoever knows the NTS extension also knows ACID.
-- **`ACID`** (OCPP_CSE): All NTS entries of the request become one patch per group and then one call to `TryUpdateNTSConfigurations` (B.4 point 4). Groups added through `NTPCtrlr.ClientGroups` are created first, and groups removed through it are removed last. The result: everything `Accepted`, or the causing entries `Rejected` and all others `Rolledback`.
+- **`ACID`** (OCPP_CSE): All NTS entries of the request become one patch per group and then one call to `TryUpdateNTSConfigurations` (B.4 point 4). Groups added through `NTPController.ClientGroups` are created first, and groups removed through it are removed last. The result: everything `Accepted`, or the causing entries `Rejected` and all others `Rolledback`.
 - **`BASE`**: like ACID, but each group is atomic on its own.
 
 `servers` is always sent **whole**, because the node replaces lists whole: the current list with all changes from the request. One patch yields one log line per group, like saving on the page. If the node refuses, its sentence goes into `additionalInfo` (≤ 1024). `NotSaved` ⇒ `Rejected` with `InternalError`, the counterpart of the web API's 500/NotChanged. `RebootRequired` never occurs, because the node applies everything live. The admin role check in the SetVariables handler stays in front of all this.
@@ -320,7 +331,7 @@ The station answers InstallCertificate, GetInstalledCertificateIds and DeleteCer
 1. **Values**: Nothing to do here, because the getters read live.
 2. **Structure**: `OnNTSGroupAdded/Removed` and new or missing server ids ⇒ register or remove components (B.3 point 4).
 3. **Monitoring**: `OnNTSGroupChanged` ⇒ the bridge compares the projected values with the last reported state and calls `VariableChanged` for every changed variable, which yields `NotifyEvent` with `Delta` (B.3 point 6). This state is only a note for monitoring, not a second source.
-4. **`OnNTSGroupLimited`** ⇒ `Limited` changes, and for `legal` also `NTPCtrlr.LegalTime`. For `legal`, a `SecurityEventNotification` is sent as well (vendor-specific, e.g. `LegalTimeLimited`/`LegalTimeRestored`).
+4. **`OnNTSGroupLimited`** ⇒ `Limited` changes, and for `legal` also `NTPController.LegalTime`. For `legal`, a `SecurityEventNotification` is sent as well (vendor-specific, e.g. `LegalTimeLimited`/`LegalTimeRestored`).
 5. **Local changes**: Changes to the legal group that did **not** come through OCPP (`Origin` web or cli) ⇒ `SecurityEventNotification` `ReconfigurationOfSecurityParameters` with the node's diff line as `techInfo` (cut to the field length, complete in the log). This way the operator learns of local changes (NIS2, CLTS §4.2).
 6. **Offset ≥ `TimeAdjustmentReportingThreshold`** ⇒ `SettingSystemTime` (B.6).
 7. **No echo**: The bridge's own changes carry `Origin = ocpp:…`, so point 5 does not apply to them. Monitors fire nevertheless, because the node normalizes (host names, a lowered quorum, a removed authority).
@@ -330,26 +341,36 @@ The station answers InstallCertificate, GetInstalledCertificateIds and DeleteCer
 
 The same pattern applies to the keys from STS §3.3, once WWCP_OCPP can register keys with a getter and setter (B.3 point 9). `GetConfiguration` computes the CSL values from the groups. `ChangeConfiguration` becomes a patch for `TryUpdateNTSConfiguration`, and the bridge takes over the paper's CSL rules (a list that is too short ⇒ the last value keeps applying, one that is too long ⇒ an error). Limits: ChangeConfiguration carries one key per request, so bundling is impossible. `ntp.legal.servers` and `ntp.legal.minServers` must therefore come in an admissible order, and `Rejected` carries no reason. In 1.6, pins and new groups stay reserved to the web page. InstallCertificate with `certificateGroup` exists in 1.6 as well (STS extends the 1.6 Security Extensions with it) and goes through the same store.
 
-### B.14 Open decisions
+### B.14 Decisions
 
-1. **May the CSMS change the legal group?** For setups under German calibration law (Eichrecht), a switch `nts.groups.legal.ocpp: "readOnly"` makes sense; the projection then reports all variables of `legal` as ReadOnly. The web page has roles, while the CSMS is otherwise trusted for the whole Device Model.
-2. **Names**: `NTPClientGroupController`/`NTPClientController` (as in WWCP_OCPP today) or the OCPP-customary `NTPClientGroupCtrlr`/`NTPClientCtrlr`. Settle this in the paper before implementing, because a CSMS addresses exactly this string.
-3. **`NTPCtrlr.ClientGroups` or implicit instances**: Alternatively, `legal` and `local` could always be reported ("virtual", switched off) and come into existence on the first write. That is friendlier to a CSMS but does not cover free ids. Recommendation: `ClientGroups`, and add it to the paper.
-4. **Server ids**: B.4 point 3 requires a web page that passes ids through. Deriving ids from host names in the bridge alone would work without a frontend change, but then `ServerURL` renames the instance, which is useless for a CSMS.
-5. **Should `ClockCtrlr.NtpServerUri` be writable?** Convenient for standard CSMSs (written by position onto the legal servers), but the instance numbers shift when a server is removed. Recommendation: read-only for now.
+Settled on 2026-10-29:
+
+1. **The CSMS may change the legal group**, always, with no switch to lock it; it is written like every other group. What protects it is the record: every change goes to the metrological log with `Origin = ocpp:<CSMS id>` (B.4 point 2), and changes from the web page or the CLI reach the operator as a `SecurityEventNotification` (B.12 point 5). The paper should say so: the legal group is writable through OCPP, and every change to it is an entry in the metrological log.
+2. **The names end in `…Controller`**: `NTPController` (the new top component, B.7), `NTPClientGroupController` and `NTPClientController`, as in WWCP_OCPP today and in the paper's text. `ClockCtrlr` keeps its standard name. The placeholders `NTSCtrlr`/`NTSServerCtrlr` are removed (B.3 point 10). The SecureDNS concept (`SecureDNS-DeviceModel-Concept.md`) should follow with `DNSClientController`/`DNSServerController`, so both extensions are named alike; that is still open there and in the SecureDNS paper.
+3. **Groups come and go through `NTPController.ClientGroups`** (B.7), with free ids as in the node, and without implicit instances. The paper adds `NTPController` with `ClientGroups`.
+4. **Server ids are a field `id` in the node file** (B.4 point 3), passed through by the web page; entries without one get `<group>-<n>`, fixed on the first OCPP write to the group. Ids derived from host names were ruled out: an instance holds at most 50 characters and a host name up to 253, and a new host name would rename the instance.
+5. **`ClockCtrlr.NtpServerUri` is writable**, by position, as B.6 describes: a standard CSMS can replace, add and remove legal servers. A new server joins the band of the last one instead of getting a priority of its own, because every band must reach the quorum on its own.
+
+The alternatives that were weighed:
+
+- *Legal group*: a switch `nts.groups.legal.ocpp: "readOnly"` for setups under German calibration law (Eichrecht), read-only or writable by default; or a legal group that is always read-only through OCPP.
+- *Names*: the OCPP-customary `NTPCtrlr`, `NTPClientGroupCtrlr` and `NTPClientCtrlr`, like the standard components and like the SecureDNS concept today.
+- *Groups*: `legal`, `local` and `grid` always reported as instances ("virtual", switched off) that come into existence on the first write. That is friendlier to a standard CSMS but covers neither free ids nor removal. Or both ways at once.
+- *Server ids*: derived from host names in the bridge alone, or positions `<group>-1…n` as for the DNS servers in the SecureDNS concept. Neither needs a node change, but the first renames the instance with its host name, and the second shifts the instances when a server is removed.
+- *`NtpServerUri`*: read-only, with changes only through `NTPClientController`; or replacing host names only, without adding or removing servers.
 
 ### B.15 Implementation steps
 
-1. **WWCP_OCPP**: reports and NotifyReport, removing components, the lookup bug, the extended `ValueSetterResponse` (B.3 points 2, 4, 5, 8). This is the prerequisite for everything, and it helps every component.
+1. **WWCP_OCPP**: reports and NotifyReport, removing components, the lookup bug, the extended `ValueSetterResponse`, the placeholders removed (B.3 points 2, 4, 5, 8, 10). This is the prerequisite for everything, and it helps every component.
 2. **WWCP_OCPP**: build the two NTP controllers from variables with a source interface (B.3 point 1), with characteristics as in tables B.8 and B.9.
 3. **Node**: events, `Origin`, the server `id` (with the frontend), the multi-group update (B.4 points 1–4), kit tests.
 4. **Bridge, reading**, in ChargingStation: sources against the node, `ClockCtrlr`, registration in `BuildOCPPNodes`.
-5. **Bridge, writing**: IndependentRequests, then ACID/BASE (B.3 point 3) and `NTPCtrlr.ClientGroups`.
+5. **Bridge, writing**: IndependentRequests, then ACID/BASE (B.3 point 3), `NTPController.ClientGroups` and `ClockCtrlr.NtpServerUri` (B.6).
 6. **Certificates** (B.3 point 7, B.11).
 7. **Monitoring and security events** (B.3 point 6, B.12).
 8. **1.6** (B.3 point 9, B.13).
 9. **Equivalence tests**: The same change through `PUT /nts/groups/{id}` and through SetVariables must yield **the same file** and **the same state** (and the same log, except for `Origin`). Plus round trips from the web page to GetVariables and from SetVariables to `GET /nts/groups/{id}`, and a compare-and-set conflict between the two paths.
-10. **Papers**: revise them per A.6 (points 8–25 are left) and B.5–B.9; then apply the pattern to `webPayments` (B.2).
+10. **Papers**: revise them per A.6 (points 8–25 are left), B.5–B.9 and the decisions of B.14; then apply the pattern to `webPayments` (B.2).
 
 ### B.16 Side findings (outside NTS, but in the running station program)
 
