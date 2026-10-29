@@ -188,7 +188,7 @@ Dependencies: WWCP_Node stays free of OCPP, because it serves every CLI (roaming
 7. **Certificates** through an exchangeable store interface instead of `ConcurrentDictionary<InstallCertificateUse, Certificate>`: InstallCertificate, GetInstalledCertificateIds and DeleteCertificate, several certificates per type, `certificateGroup` passed through, nothing stored on `Rejected`.
 8. **Fix the lookup bug** in `AOCPPNetworkingNode` (lines 122 and 151).
 9. **1.6**: make configuration keys registrable with a getter and setter (like `VariableConfig`). Unknown keys ⇒ `NotSupported`.
-10. **Remove the placeholders** `NTSCtrlr` and `NTSServerCtrlr` (`WWCP_OCPPv2.1_ChargingStation/Components/Logical/NTS/`). They are copies of `AuthCtrlr` without NTS variables; `NTPController`, `NTPClientGroupController` and `NTPClientController` replace them (B.14 point 2).
+10. **Remove the placeholders** `NTSCtrlr` and `NTSServerCtrlr` (`WWCP_OCPPv2.1_ChargingStation/Components/Logical/NTS/`); `NTPController`, `NTPClientGroupController` and `NTPClientController` replace them (B.14 point 2). `NTSCtrlr` is a copy of `AuthCtrlr` without NTS variables. `NTSServerCtrlr` is not: it is a work-in-progress sketch (06d64b5f) with about 40 NTP and NTS-KE settings as plain properties, among them cookie refresh, revocation check and signed responses, but no Device Model variables. Its settings are weighed for B.8 and B.9 before it goes.
 
 Because only the first subscriber is dispatched, these hooks must sit **inside** the handlers of `TestChargingStationNode`/`TestChargePointNode`. An additional handler in the station is not enough.
 
