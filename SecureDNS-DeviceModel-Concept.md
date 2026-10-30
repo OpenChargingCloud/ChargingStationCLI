@@ -180,7 +180,7 @@ Points 1–9 of NTS concept B.3, built **once** for both bridges. For DNS, in ad
 2. **Origin**: an optional parameter for `TryUpdateDNSConfiguration` (`web:<account>`, `cli:<account>`, `ocpp:<CSMS id>`), named in the diff line; `tofu` and `start` for the node's own changes. As NTS concept B.4 point 2.
 3. **Certificate news**: `OnServerNews(ServerJudgement, ServerNews)` raised exactly where `WriteDown` says news, not in its debug branch: `Refused`, `Tolerated`, `Recorded`, `BelievedAgain`, `Learned`, `CertificateChanged`. `WriteDown` serves name servers and NTS-KE servers alike, so the NTS bridge gets certificate events for its servers from the same place.
 4. **Read, change and write under one lock**: `TryUpdateDNSConfiguration(Func<JObject, JObject?> Change, String Origin, out Error, out NotSaved)`, with the snapshot and the write under one `reconfigureLock`. `pinsAsShown` protects the pins, but not the list: a server added on the page between the bridge's read and its write would be lost. `SemaphoreSlim` is not reentrant, so today's body becomes a private method that expects the lock to be held.
-5. **A dry run of a configuration**: `Task<DNSPreflight> TryResolveWithAsync(JObject Section, IEnumerable<DomainName> Names, TimeSpan Within)`. It makes a separate `DNSClient` with the servers and pins of the section, judges certificates against those pins **without** writing news, learning pins or keeping judgements, and answers which names resolved, and what each server came to. `ResolveAsync` of the diagnostics only asks the configured servers. Needed for B.6.
+5. **A dry run of a configuration**: `Task<DNSPreflight> TryResolveWithAsync(JObject Section, IEnumerable<DomainName> Names, TimeSpan Within)`. It makes a separate `DNSClient` with the servers and pins of the section, judges certificates against those pins **without** writing news, learning pins or keeping judgements, and answers which names resolved, and what each server came to. `ResolveAsync` of the diagnostics only asks the configured servers. Needed for B.6. *Done on 2026-10-30* as `WWCPNode.ResolveWithAsync(Section, Names, Within)`, which returns a `DNSPreflight` with an `Error` for a section that would not be saved, and `JudgeServer(…, Remember: false)`, with kit tests.
 6. **`EncryptedOnly`** (small): refuse unencrypted transports while set, and stop asking such servers (SDNS §2.4).
 7. **`ServerSource` writable**: remember the servers the node was constructed with, and read `"servers": null` in a save as "remove the key", as for `recursionDesired`.
 8. **Close connections when a root goes**: when a TLS root leaves the store or loses the usage `dns`, close the connections of the servers whose last judgement ended at it, as `ApplyDNSConfiguration` does for changed pins. Nothing subscribes to `CertificateStore.OnChanged` (`Certificates/CertificateStore.cs:219`) for this today.
@@ -264,7 +264,7 @@ An empty slot reports `""` for every variable.
 | ReadOnly | `Rejected` | `ReadOnly` |
 | outside min/max, more than 16 pins | `Rejected` | `ValueOutOfRange` |
 | type or format error | `Rejected` | `InvalidValue` |
-| `OldAttributeValue` ≠ the getter's current value | `Rejected` | as in the NTS concept (`ValueChanged`, to be settled in the Safe & Secure paper) |
+| `OldAttributeValue` ≠ the getter's current value | `Rejected` | `ValueChanged`, as in the NTS concept, until the Safe & Secure paper settles a code |
 | the same variable twice in the request | `Rejected` | `InvalidValue` |
 
 **The slot table.** At the start of a request, the bridge reads slots 1…16 from one snapshot, filled up with empty slots. The table stays addressed by slot for the **whole** request, even though the node holds a compacted list after every change. Otherwise, after slot 2 was emptied, a later entry for slot 3 would hit the server that moved up into it.
@@ -352,6 +352,13 @@ The shared steps are those of NTS concept B.15 and are built **once**. DNS is th
 3. **WWCP_OCPP**: replace the placeholders with `DNSClientController`/`DNSServerController`, plus `NameServerRootCertificate` and the security event types (B.3).
 4. **Bridge, reading**: sources against the node, registration in `BuildOCPPNodes`, GetVariables, the report.
 5. **Node and bridge, writing**: the dry run (B.4 point 5), then B.9: `IndependentRequests` with the slot table and the exception for empty slots, then `ACID`/`BASE`, with the pre-flight.
+
+   *Steps 3 to 5 done on 2026-10-30*, without `NameServerRootCertificate` and the security events:
+   - WWCP_OCPP has the request-wide hook of NTS concept B.3 point 3: `ISetVariablesSource`, which a `ComponentConfig` or a single `VariableConfig` can name. ACID holds per source, and a source defines its BASE unit. `DNSVariable` became the shared `ControllerVariable`, and the extension statuses such as `Rolledback` are now written and parsed.
+   - The node has the dry run.
+   - The station's `DNSDeviceModel` writes through `TryUpdateDNSConfiguration`.
+
+   Still open are B.4 points 1 to 4 and 6 to 8. Until point 4 exists, a server added on the page between the bridge's read and its write is lost.
 6. **Certificates** (B.10), through the shared store interface, with B.4 point 8.
 7. **Monitoring and security events** (B.11).
 8. **OCPP 1.6** (B.12).
