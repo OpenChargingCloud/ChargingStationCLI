@@ -99,6 +99,19 @@ CLTS is mostly about the **server and governance side** (PTB as the provider). O
 
 **Technical errors (first).** Points 1–7 were worked into both papers on 2026-10-29 (Whitepapers c9b1877, pushed to origin, github and git2). For point 5, CLTS §5.2.3 now specifies the owner name `_ntske.<service name>`, certificate validation against the service name (not against the target name, which would be safe only with DNSSEC), and weighting through distinct target names for the same server. For point 6, the policy JSON now has `quorum.servers` (ns) and `quorum.clients` (ms, example value 100 ms).
 
+**Points 8–25** were worked into both papers on 2026-10-30, together with B.5–B.9 and the decisions of B.14 (Whitepapers, not committed yet). STS §3.2 now has the components `ClockCtrlr` (3.2.1), `NTPController` (3.2.2), `NTPClientGroupController` (3.2.3) and `NTPClientController` (3.2.4), with the table layout of the SecureDNS paper (OCPP data types, *Values List / Limits*, *Reference Implementation*), SetVariables semantics (3.2.5) and security events (3.2.6). STS §3.3 maps the same onto OCPP 1.6 keys, and STS §8 relates the paper to CLTS, SecureDNS and Safe & Secure Device Model Updates. Where the papers now say more than, or something other than, Part B:
+
+- **Lists are comma separated strings.** `ClientGroups`, `Clients`, `CertificatePins` and `RootPins` are `string`, not `MemberList` or `SequenceList`: both of those take only values of the `valuesList`, and group and client ids are free. B.7 and B.8 follow.
+- **The check interval stays `MinInterval`/`MaxInterval`**, moved to the group, with a random time in between, instead of a new `CheckInterval`. The node has one fixed period, so it reports both as `checkEverySeconds` and accepts only the same value for both, in one ACID request. B.8 follows.
+- `LegalTimeReason` uses OCPP-style values (`NotClaimed`, `Disabled`, `NeverChecked`, `Stale`, `OffBy`), mapped from the node's `why`.
+- **New defaults, to be confirmed**: `MinRefresh`/`MaxRefresh` 43200/86400 s (once a day the certificate is checked again; the node uses a fixed 1800 s), and in OCPP 1.6 `ntp.legal.maxInterval` 1800 instead of 3600, so that it stays below `ntp.legal.maxAge` 3600.
+- **Security events** proposed beside the OCPP ones (`SettingSystemTime`, `ReconfigurationOfSecurityParameters`): `LegalTimeLimited`, `LegalTimeRestored`, and, as for name servers, `InvalidTimeServerCertificate` and `TimeServerCertificateChanged`.
+- The global 1.6 key `ntp.enabled` is replaced by `ntp.<group>.enabled`; the local group's keys are listed only where they differ from the legal ones.
+- Point 23: `legalTimeCA1` twice in the `rootCAs` example was not a mistake: the list is per server. The description now says so.
+- CLTS: the risk subsections are written out, with *Missing Audit Trails* added as §3.6 (the table had it, the subsections did not). The status document (§5.3) defines `id`, `level`, `quorum.ok` and `hosts[].level`, which the decision rules (§5.1.2) now refer to. The TXT record keeps the order `v; id; …` of the ABNF, now also stated in the rules.
+
+The German ToDo list at the end of STS stays as it is.
+
 1. *STS §2.1*: The NTS-KE request contains no nonce. The Unique Identifier belongs in the NTP request (RFC 8915 §5.3).
 2. *STS §2.1*: NTS-KE returning the NTP server and port is **standardized** (RFC 8915 §4.1.7 and §4.1.8, records 6/7), not "no-longer-standardized".
 3. *STS §3.2.1*: The model is the wrong way round. In NTS one configures the **NTS-KE server**, and it names the NTP server. `ServerURL` should therefore be the NTS-KE host (a host name, not a URL); the NTP host and port are the optional override.
@@ -241,23 +254,24 @@ A standard CSMS knows only `ClockCtrlr`. The bridge fills it from the legal grou
 
 | Variable | Type | Mutability | Node | Note |
 |---|---|---|---|---|
-| `ClientGroups` | MemberList | rw | the group ids | A new id ⇒ `TryAddNTSGroup` (switched off, without servers). A missing id ⇒ `TryRemoveNTSGroupAsync`; if the group is still enabled ⇒ `Rejected` with "switch it off first". |
-| `SuggestedGroups` | MemberList | ro | `NTSSection.SuggestedIds` minus the existing ones | like `suggested` in the API |
+| `ClientGroups` | string, comma separated | rw | the group ids | A new id ⇒ `TryAddNTSGroup` (switched off, without servers). A missing id ⇒ `TryRemoveNTSGroupAsync`; if the group is still enabled ⇒ `Rejected` with "switch it off first". Not a `MemberList`, which takes only values of the `valuesList`. |
+| `SuggestedGroups` | string, comma separated | ro | `NTSSection.SuggestedIds` minus the existing ones | like `suggested` in the API |
 | `LegalTime` | boolean | ro | `ClockJSON().legal` | a monitoring target |
-| `LegalTimeReason` | OptionList | ro | `ClockJSON().why` | `notClaimed`, `ntsOff`, `neverChecked`, `stale`, `offBy` |
+| `LegalTimeReason` | OptionList | ro | `ClockJSON().why` | `NotClaimed`, `Disabled`, `NeverChecked`, `Stale`, `OffBy`, from the node's `notClaimed`, `ntsOff`, `neverChecked`, `stale`, `offBy` |
 
 ### B.8 Variables: `NTPClientGroupController[<id>]`
 
 | Variable | Type (characteristics) | Mutability | Node key | Note |
 |---|---|---|---|---|
 | `Enabled` | boolean | rw | `enabled` | OCPP standard variable |
-| `Clients` | SequenceList | rw | `servers[].id` | A new id ⇒ a new entry, whose `ServerURL` must come in the same ACID request (B.10). A missing id ⇒ the entry is removed. The order does not matter; `Priority` decides. |
+| `Clients` | string, comma separated | rw | `servers[].id` | A new id ⇒ a new entry, whose `ServerURL` must come in the same ACID request (B.10). A missing id ⇒ the entry is removed. The order does not matter; `Priority` decides. |
 | `MinServers` | integer, min 1, max = enabled servers | rw | `minServers` | Actual = the value set (`Group.Quorum`) |
 | `EffectiveMinServers` | integer | ro | `Sources.MinServers` | lower when fewer servers are enabled |
 | `MaxDeviation` | decimal s, 0.001…3600 | rw | `maxDeviationSeconds` | the spread between servers |
 | `ErrorLogging` | integer 1…65535 | rw | `errorLogging` | |
 | `MaxErrors` | integer 1…65535 | rw | `maxErrors` | |
-| `CheckInterval` *(new)* | integer s, 10…86400 | rw | `checkEverySeconds` | As long as the node does not spread randomly: `MinInterval` = `MaxInterval` = `CheckInterval`; unequal values ⇒ `Rejected` |
+| `MinInterval`, `MaxInterval` | integer s, 10…86400 | rw | `checkEverySeconds` | Moved from the client to the group (STS 3.2.3). As long as the node does not spread randomly, both read as `checkEverySeconds`, and only the same value for both is accepted, in one ACID request; unequal values ⇒ `Rejected` |
+| `Preflight` | integer s | n/a | not implemented | moved from the client to the group; not in the report ⇒ `UnknownVariable` |
 | `Timeout` *(new)* | decimal s, 0.1…3600 | rw | `timeoutSeconds` | |
 | `LegalTimeAuthority` *(new, legal only)* | string[80] | rw | `legalTimeAuthority` | An empty string ⇒ removed (`RemovesLegalTimeAuthority`) |
 | `LegalTimeTolerance` *(new, legal only)* | decimal s, 0.001…60 | rw | `legalTimeToleranceSeconds` | |
@@ -283,14 +297,14 @@ The "legal only" variables exist **only** in the instance `legal`. In any other 
 | `Mode` | OptionList `NTSv4` | ro | n/a | other values ⇒ `Rejected` |
 | `Priority` | integer 0…255 | rw | `priority` | |
 | `RootCAs` | string[50] | rw | `rootGroup` (new) ⇒ `roots[]` | B.11 |
-| `CertificatePins` *(new)* | SequenceList SHA-256 | rw | `certificates[]` | ≤ 16 |
-| `RootPins` *(new)* | SequenceList SHA-256 | rw | `roots[]` | ≤ 16 |
+| `CertificatePins` *(new)* | string, comma separated SHA-256 | rw | `certificates[]` | ≤ 16 |
+| `RootPins` *(new)* | string, comma separated SHA-256 | rw | `roots[]` | ≤ 16 |
 | `OnPinMismatch` *(new)* | OptionList `Refuse,Record,Accept` | rw | `onMismatch` | |
 | `TrustOnFirstUse` *(new)* | OptionList `None,Root,Certificate` | rw | `trustOnFirstUse` | |
 | `AEADAlgorithm` | OptionList `AES-SIV-CMAC-256,AES-128-GCM-SIV` | ro, rw after B.4 point 5 | `aead` / negotiated | |
 | `Cookies`, `LastKeyExchange`, `Certificate`, `Judgement` | various | ro | state per host name | like `timeSources[]` in the API |
-| `MinRefresh`/`MaxRefresh` | integer s | ro (1800) | Norn `NTSKERefreshInterval` | rw only once the node makes it configurable |
-| `DelayAsymmetry`, `DelayVarAsymmetry`, `Preflight`, `ErrorLogging`, `NoCertTimeCheckAfterReboot`, `SignedResponses` | n/a | n/a | not implemented | not in the report ⇒ `UnknownVariable`; report them only once the node supports them |
+| `MinRefresh`/`MaxRefresh` | integer s | ro (1800) | Norn `NTSKERefreshInterval` | rw only once the node makes it configurable; the paper's defaults are now 43200/86400 |
+| `DelayAsymmetry`, `DelayVarAsymmetry`, `NoCertTimeCheckAfterReboot`, `SignedResponses` | n/a | n/a | not implemented | not in the report ⇒ `UnknownVariable`; report them only once the node supports them. `Preflight` and `ErrorLogging` are variables of the group now (B.8). |
 
 ### B.10 Writing: OCPP → node
 
@@ -370,7 +384,7 @@ The alternatives that were weighed:
 7. **Monitoring and security events** (B.3 point 6, B.12).
 8. **1.6** (B.3 point 9, B.13).
 9. **Equivalence tests**: The same change through `PUT /nts/groups/{id}` and through SetVariables must yield **the same file** and **the same state** (and the same log, except for `Origin`). Plus round trips from the web page to GetVariables and from SetVariables to `GET /nts/groups/{id}`, and a compare-and-set conflict between the two paths.
-10. **Papers**: revise them per A.6 (points 8–25 are left), B.5–B.9 and the decisions of B.14; then apply the pattern to `webPayments` (B.2).
+10. **Papers**: revise them per A.6, B.5–B.9 and the decisions of B.14 (done on 2026-10-30, see A.6); then apply the pattern to `webPayments` (B.2).
 
 ### B.16 Side findings (outside NTS, but in the running station program)
 
