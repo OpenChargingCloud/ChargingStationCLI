@@ -405,7 +405,7 @@ The alternatives that were weighed:
      - Writing the groups one by one makes the four all-or-none tests red.
      - Without the check across groups, the three id tests go red.
    - The node suite passes 1184/1184 (SourceRules rerun with the artifacts inside the repo), and the frontend 660/660.
-4. **Bridge, reading**, in ChargingStation: sources against the node, `ClockCtrlr`, registration in `BuildOCPPNodes`. *Built on 2026-11-02: WWCP_OCPP 1b452d02, on top of c811e28c, and station b8ef0f8, on top of a9ea3a3, with WWCP_Node eb2066c (not pushed yet).* Contents:
+4. **Bridge, reading**, in ChargingStation: sources against the node, `ClockCtrlr`, registration in `BuildOCPPNodes`. *Built on 2026-11-02: WWCP_OCPP 1b452d02, on top of c811e28c, and station b8ef0f8, on top of a9ea3a3, with WWCP_Node eb2066c (pushed and pinned on 2026-11-02).* Contents:
    - **WWCP_OCPP**:
      - `ClockController` is read from an `IClockControllerSource` at every read, like the NTP controllers. It is registered under the standard's name `ClockCtrlr`; it used to take nine values and register as `ClockController`, and nothing registered it.
      - Its variables are the standard's. `NtpServerUri` has the instances 1 to 9, and `TimeOffset` has none and `NextTransition`.
