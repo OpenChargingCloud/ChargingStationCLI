@@ -253,6 +253,11 @@ A standard CSMS knows only `ClockCtrlr`. The bridge fills it from the legal grou
 **Writing `NtpServerUri`** (decided on 2026-10-29, B.14 point 5). OCPP makes the variable's instance a single digit, the NTP priority (1 = highest). The node has priorities 0…255 and asks servers of equal priority together, as one band, and Norn requires *each band on its own* to reach the quorum (`TimeSourceGroup.Measure`). An index of its own per server would make bands of one server that never reach a quorum of 2. The index therefore stands for the position in query order:
 
 - **Reading**: `[k]` is the k-th enabled server of the legal group in query order (priority, then file order). Up to nine are shown. When fewer than nine are enabled, the report also lists the next free index `[n+1]` with an empty value, so a standard CSMS sees where a server can be added.
+  *As built in step 4 (2026-11-02)*:
+  - All nine indexes are in the report, and those beyond the servers asked read empty, as the DNS slots do. The first empty one shows where a server can be added.
+  - A server reads as `nts://host`, with `:port` where its NTS-KE port is not 4460.
+  - A node without a legal group reads nine empty ones.
+  - `TimeAdjustmentReportingThreshold`, `TimeOffset` (with and without the instance `NextTransition`), `TimeZone` and `NextTimeOffsetTransitionDateTime` are left out until the node has them, so a CSMS reads them as unknown.
 - **`[k] = host` at an existing position** replaces that server's host name, and its NTS-KE port when the value is `nts://host:port`. The entry keeps its id, priority, root pins, `onMismatch` and `trustOnFirstUse`, and loses its certificate pins, which name the old server's certificate. The diff line in the metrological log shows both.
 - **`[n+1] = host`** adds a server with that host name, enabled, with the default ports, in the band of the last server (with its priority), so it counts towards the same quorum. An index beyond `n+1` ⇒ `Rejected`, with the next free index in `additionalInfo`.
 - **`[k] = ""`** removes the k-th server, and the later ones move up one index. If the node refuses, e.g. because fewer servers would be enabled than an explicit `minServers`, its sentence goes into `additionalInfo`.
@@ -400,7 +405,37 @@ The alternatives that were weighed:
      - Writing the groups one by one makes the four all-or-none tests red.
      - Without the check across groups, the three id tests go red.
    - The node suite passes 1184/1184 (SourceRules rerun with the artifacts inside the repo), and the frontend 660/660.
-4. **Bridge, reading**, in ChargingStation: sources against the node, `ClockCtrlr`, registration in `BuildOCPPNodes`.
+4. **Bridge, reading**, in ChargingStation: sources against the node, `ClockCtrlr`, registration in `BuildOCPPNodes`. *Built on 2026-11-02: WWCP_OCPP 1b452d02, on top of c811e28c, and station b8ef0f8, on top of a9ea3a3, with WWCP_Node eb2066c (not pushed yet).* Contents:
+   - **WWCP_OCPP**:
+     - `ClockController` is read from an `IClockControllerSource` at every read, like the NTP controllers. It is registered under the standard's name `ClockCtrlr`; it used to take nine values and register as `ClockController`, and nothing registered it.
+     - Its variables are the standard's. `NtpServerUri` has the instances 1 to 9, and `TimeOffset` has none and `NextTransition`.
+     - `ControllerVariable.ToVariableConfig` takes an optional instance.
+   - **Station**:
+     - `OCPP/NTSDeviceModel` is the source of `ClockCtrlr` and of the three NTP controllers. It reads the node (`NTSGroups`, `NTSConfigurationJSON(group)`, `ClockJSON`) at every read, through the JSON the page reads.
+     - `ConfigureNTS` registers all of them in `BuildOCPPNodes`.
+     - `FollowNTSGroups` keeps one component per group and server on the node built last. It follows `OnNTSGroupAdded`, `OnNTSGroupRemoved` and `OnNTSGroupChanged` (new or missing server ids, a server moved to another group).
+   - **Left out of `NTPClientController`**, so they read as unknown:
+     - `NTSKEServerURL`: the node has no separate key exchange server.
+     - `RootCAs`: step 6.
+     - `MinRefresh`/`MaxRefresh`: the node does not say Norn's `NTSKERefreshInterval`, and a fixed 1800 would be a second truth.
+     - `DelayAsymmetry`, `DelayVarAsymmetry`, `NoCertTimeCheckAfterReboot` and `SignedResponses`.
+     - `Preflight` is left out of the group.
+   - **How some values read**:
+     - `ServerURL` reads without the final dot the node writes.
+     - The pins and `OnPinMismatch`/`TrustOnFirstUse` are what the node holds the host name to (the page's `heldTo`). A host named in two groups shows the entry that says something about it first.
+     - `AEADAlgorithm` is the one the last key exchange agreed on, "" before the first.
+     - `Problem` is a refused certificate at the last key exchange.
+     - `LegalTimeReason` maps the node's `ntsOff` to `Disabled`.
+
+   Tests:
+   - 6 `ClockControllerTests` in WWCP_OCPP. They do not compare `DateTime` over the wire, because of the parsing finding in B.16.
+   - 10 `NTSDeviceModelTests` in the station, including one through the OCPP node's GetVariables: groups and servers made, changed and taken away, and a node rebuilt for changed EVSEs. That one is red on station a9ea3a3, where the node knows neither ClockCtrlr nor the NTP controllers.
+   - The tests that need the new API were checked by mutations:
+     - Not following the groups, or following only the first node built, makes the wire test red.
+     - `NtpServerUri` in file order, switched-off servers included, makes the clock test red.
+     - A group's or a server's JSON kept from the first read makes the change test red.
+     - `ClockCtrlr` under the old name makes 5 of the 6 clock tests red.
+   - The 2.1 suite passes 1970/1970. The station suite passes 578/578, SourceRules rerun with the artifacts inside the repo.
 5. **Bridge, writing**: IndependentRequests, then ACID/BASE (B.3 point 3), `NTPController.ClientGroups` and `ClockCtrlr.NtpServerUri` (B.6).
 6. **Certificates** (B.3 point 7, B.11).
 7. **Monitoring and security events** (B.3 point 6, B.12).
@@ -418,3 +453,9 @@ Fixed in WWCP_OCPP 5afa19e0 (2026-10-29), each with a test, for the battery swap
 - InstallCertificate stored certificates even on `Rejected`, so a rejected one replaced the one installed before. Only an accepted certificate is stored now.
 
 Still open: SetNetworkProfile is accepted and discarded.
+
+Found in step 4 (2026-11-02), not fixed:
+- WWCP_Core's `WWCPWebSocketServer` and `WWCPWebSocketClient` (and the overlay ones) read every message with `JArray.Parse` and Newtonsoft's default `DateParseHandling.DateTime`. A string that looks like a time becomes a time.
+- So a CSMS reads the variable value "2026-11-02T12:00:00.000Z" as "11/02/2026 12:00:00". This happens in GetVariables and NotifyReport, for `ClockCtrlr.DateTime`, `LastCheck`, `LastKeyExchange` and DNS `KnownSince`.
+- Likewise a station receives a SetVariables value that looks like a time in that form. Any other free-text field that holds such a string is mangled the same way.
+- The fix is `DateParseHandling.None` where the messages are parsed. The parsers of dates in the messages would then have to read strings, so that has to be checked across WWCP_OCPP first.
