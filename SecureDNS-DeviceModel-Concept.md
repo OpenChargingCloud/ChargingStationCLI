@@ -180,6 +180,12 @@ Points 1–9 of NTS concept B.3, built **once** for both bridges. For DNS, in ad
 2. **Origin**: an optional parameter for `TryUpdateDNSConfiguration` (`web:<account>`, `cli:<account>`, `ocpp:<CSMS id>`), named in the diff line; `tofu` and `start` for the node's own changes. As NTS concept B.4 point 2.
 3. **Certificate news**: `OnServerNews(ServerJudgement, ServerNews)` raised exactly where `WriteDown` says news, not in its debug branch: `Refused`, `Tolerated`, `Recorded`, `BelievedAgain`, `Learned`, `CertificateChanged`. `WriteDown` serves name servers and NTS-KE servers alike, so the NTS bridge gets certificate events for its servers from the same place.
 4. **Read, change and write under one lock**: `TryUpdateDNSConfiguration(Func<JObject, JObject?> Change, String Origin, out Error, out NotSaved)`, with the snapshot and the write under one `reconfigureLock`. `pinsAsShown` protects the pins, but not the list: a server added on the page between the bridge's read and its write would be lost. `SemaphoreSlim` is not reentrant, so today's body becomes a private method that expects the lock to be held.
+
+   *Points 1 to 4 done on 2026-11-02*, on top of NTS concept B.15 step 3 (WWCP_Node `eb2066c`), with its `ChangeOrigin` and its way of telling listeners, now shared as `Tell` in `WWCPNode.Listeners.cs`:
+   - `OnDNSConfigurationChanged(Changes, Origin)` is told once per save, after the lock is let go, to each listener on its own. A save that changes nothing tells nothing. `LearnNameServerPin` tells "`<server>` held to …" by `tofu`. `Origin` is `String?`, as for NTS: null where nobody said, and the start is told to nobody.
+   - `TryUpdateDNSConfiguration(JSON, out Error, out NotSaved, Origin = null)` names the origin in the log line, "… (by web:root).", and `PutDNSConfiguration` passes `web:<account>`. Without an origin the line reads as before.
+   - `OnServerNews(ServerJudgement, ServerNews)` is told where `WriteDown` says news, after it is written, once per news, and never in a dry run (`Remember: false`).
+   - `TryUpdateDNSConfiguration(Func<JObject, JObject?> Change, out Error, out NotSaved, Origin = null)` asks the change for the section as `DNSConfigurationJSON` says it under the lock. A change that says null changes nothing. The JSON overload goes the same way.
 5. **A dry run of a configuration**: `Task<DNSPreflight> TryResolveWithAsync(JObject Section, IEnumerable<DomainName> Names, TimeSpan Within)`. It makes a separate `DNSClient` with the servers and pins of the section, judges certificates against those pins **without** writing news, learning pins or keeping judgements, and answers which names resolved, and what each server came to. `ResolveAsync` of the diagnostics only asks the configured servers. Needed for B.6. *Done on 2026-10-30* as `WWCPNode.ResolveWithAsync(Section, Names, Within)`, which returns a `DNSPreflight` with an `Error` for a section that would not be saved, and `JudgeServer(…, Remember: false)`, with kit tests.
 6. **`EncryptedOnly`** (small): refuse unencrypted transports while set, and stop asking such servers (SDNS §2.4).
 7. **`ServerSource` writable**: remember the servers the node was constructed with, and read `"servers": null` in a save as "remove the key", as for `recursionDesired`.
@@ -283,7 +289,10 @@ An empty slot reports `""` for every variable.
 - **The port rule**: when the change switches the transport and names no `Port`, `port` is left out if the old port was the default of the old transport. Otherwise "UDP on 53" would become a DoT server on port 53 after `Transport = TLS` (A.4 point 4).
 - **`pinsAsShown`** on every server, with the pins as the bridge read them at the start of the request, or wrote them itself since. The node then merges a pin that trust on first use learned in the meantime instead of overwriting it (A.4 point 5).
 
-**Pre-flight** (B.6), then **one** call of `TryUpdateDNSConfiguration` per change, with `Origin = ocpp:<CSMS id>`; under one lock once B.4 point 4 exists. With `IndependentRequests` these are several calls in a row, each with its own diff line, like several saves on the page.
+**Pre-flight** (B.6), then **one** call of `TryUpdateDNSConfiguration` per change, with `Origin = ocpp:<sender>`, under one lock (B.4 point 4). With `IndependentRequests` these are several calls in a row, each with its own diff line, like several saves on the page.
+
+- **The sender** is the start of the request's network path, which WWCP_OCPP hands every entry (`SetVariableEntry.Request`). A CSMS connected directly is `CSMS` there, not its own id, so the origin is `ocpp:CSMS`. An empty path counts as `CSMS` too.
+- **A list changed elsewhere**: the change is made from the list the node holds under the lock. If that list is not the one in the slot table, the change is refused with `ValueChanged` and nothing is sent. "Not the one" is judged as the node tells servers apart: the IPv6 short form and a port written out are the same server. An example is a server added on the page while the request was being made. Sending the whole list back would write that server away, and the pre-flight was run against the table's list. The CSMS reads again and decides.
 
 **Results**, per change for all its entries:
 
@@ -291,7 +300,7 @@ An empty slot reports `""` for every variable.
 - `NotSaved` ⇒ `Rejected` with `InternalError`; nothing was put into effect (SDNS §3.1.3, T17).
 - A refusal by the node ⇒ `Rejected` with `InvalidValue` (with `ACID`: the causing entries `Rejected`, all others `Rolledback`). `additionalInfo` is the node's sentence, with `'dns.servers[i]'` (the index in the compacted list) rewritten to `DNSServerController[<slot>]`, cut to the 1024 characters of the OCPP 2.1 schema (A.6 point 9). The node does not say which entry caused the refusal; the bridge takes the slot from the rewritten sentence, otherwise all entries of the change.
 
-The admin role check in the SetVariables handler stays in front of all this. Until `Origin` exists, the bridge logs "CSMS '<id>' changed the name resolution of this charging station" with the tags `dns` and `ocpp`, like `PutDNSConfiguration` does for the page.
+The admin role check in the SetVariables handler stays in front of all this. Before each change the bridge logs "A CSMS changes the name resolution of this charging station (by ocpp:CSMS): <change>" with the tags `dns` and `ocpp`, like `PutDNSConfiguration` does for the page. The node's diff line ends in "(by ocpp:CSMS)".
 
 ### B.10 Certificates: `NameServerRootCertificate`
 
@@ -348,7 +357,21 @@ Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS 
 The shared steps are those of NTS concept B.15 and are built **once**. DNS is then the smaller of the two bridges and suits being first.
 
 1. **WWCP_OCPP**: reports and NotifyReport, removing components, the lookup bug, the extended `ValueSetterResponse`, the transaction hook (NTS concept B.15 steps 1–2).
-2. **Node**: B.4 points 1–4 (event, `Origin`, certificate news, the locked update), together with NTS concept B.15 step 3, with kit tests.
+2. **Node**: B.4 points 1–4 (event, `Origin`, certificate news, the locked update), together with NTS concept B.15 step 3, with kit tests. *Done on 2026-11-02* (B.4). The station's bridge passes `ocpp:<sender>` and refuses a change when the list was changed elsewhere (B.9).
+
+   Tests:
+   - 7 `DNSChangeTests` and 4 more `NameServerPinningTests` (6 cases) in the node.
+   - One kit test over the JSON API, and an assertion in the kit's dry run that it tells no news.
+   - 3 more `DNSDeviceModelWritingTests` in the station.
+   - `ASourceIsToldWhoSentTheRequest_Test` in WWCP_OCPP.
+   - 7 mutations, each red in exactly its test:
+     - the change asked before the lock;
+     - listeners told inside the lock;
+     - the same verdict told again;
+     - a learned pin not told;
+     - the list not checked;
+     - the list compared as written;
+     - the request not handed on.
 3. **WWCP_OCPP**: replace the placeholders with `DNSClientController`/`DNSServerController`, plus `NameServerRootCertificate` and the security event types (B.3).
 4. **Bridge, reading**: sources against the node, registration in `BuildOCPPNodes`, GetVariables, the report.
 5. **Node and bridge, writing**: the dry run (B.4 point 5), then B.9: `IndependentRequests` with the slot table and the exception for empty slots, then `ACID`/`BASE`, with the pre-flight.
@@ -358,7 +381,7 @@ The shared steps are those of NTS concept B.15 and are built **once**. DNS is th
    - The node has the dry run.
    - The station's `DNSDeviceModel` writes through `TryUpdateDNSConfiguration`.
 
-   Still open are B.4 points 1 to 4 and 6 to 8. Until point 4 exists, a server added on the page between the bridge's read and its write is lost.
+   B.4 points 1 to 4 followed on 2026-11-02 (step 2). Still open are B.4 points 6 to 8.
 6. **Certificates** (B.10), through the shared store interface, with B.4 point 8.
 7. **Monitoring and security events** (B.11).
 8. **OCPP 1.6** (B.12).
