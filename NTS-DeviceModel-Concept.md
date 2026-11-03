@@ -452,7 +452,7 @@ The alternatives that were weighed:
      - A group's or a server's JSON kept from the first read makes the change test red.
      - `ClockCtrlr` under the old name makes 5 of the 6 clock tests red.
    - The 2.1 suite passes 1970/1970. The station suite passes 578/578, SourceRules rerun with the artifacts inside the repo.
-5. **Bridge, writing**: IndependentRequests, then ACID/BASE (B.3 point 3), `NTPController.ClientGroups` and `ClockCtrlr.NtpServerUri` (B.6). *Built on 2026-11-02: WWCP_Node e05d41d, on top of 95b7e84, WWCP_OCPP a4e4182a, on top of d7e16490, and station 3e1de56, on top of d40fb26 (committed on 2026-11-03, not pushed yet)*, with the refinements noted under B.10. Contents:
+5. **Bridge, writing**: IndependentRequests, then ACID/BASE (B.3 point 3), `NTPController.ClientGroups` and `ClockCtrlr.NtpServerUri` (B.6). *Built on 2026-11-02: WWCP_Node e05d41d, on top of 95b7e84, WWCP_OCPP a4e4182a, on top of d7e16490, and station 3e1de56, on top of d40fb26 (pushed and pinned on 2026-11-03)*, with the refinements noted under B.10. Contents:
    - **WWCP_Node**:
      - `TryUpdateNTSConfigurations` takes a change it asks for its parts under the lock (B.4 point 4).
      - The overload with fixed parts goes through it.
