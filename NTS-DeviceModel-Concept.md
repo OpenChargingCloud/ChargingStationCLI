@@ -612,7 +612,7 @@ Fixed in WWCP_OCPP 5afa19e0 (2026-10-29), each with a test, for the battery swap
 
 Still open: SetNetworkProfile is accepted and discarded.
 
-Found in step 4 (2026-11-02), fixed on 2026-11-03 in WWCP_Core cf75d625 (with WWCP_OCPP 5dad3658, not pushed yet):
+Found in step 4 (2026-11-02), fixed on 2026-11-03 in WWCP_Core cf75d625 (with WWCP_OCPP 5dad3658; pushed and pinned on 2026-11-03):
 - WWCP_Core's `WWCPWebSocketServer` and `WWCPWebSocketClient` (and the overlay ones) read every message with `JArray.Parse` and Newtonsoft's default `DateParseHandling.DateTime`. A string that looks like a time becomes a time.
 - So a CSMS reads the variable value "2026-11-02T12:00:00.000Z" as "11/02/2026 12:00:00". This happens in GetVariables and NotifyReport, for `ClockCtrlr.DateTime`, `LastCheck`, `LastKeyExchange` and DNS `KnownSince`.
 - Likewise a station receives a SetVariables value that looks like a time in that form. Any other free-text field that holds such a string is mangled the same way.
