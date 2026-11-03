@@ -220,7 +220,7 @@ Because only the first subscriber is dispatched, these hooks must sit **inside**
    - The forms of point 2 live in `ChangeOrigin` (`Web`, `CLI`, `OCPP`, `Start`, `TOFU`, `IsOCPP`), agreed with the SecureDNS session for its own B.4 points 1 and 2. The log lines end in " (by web:root)". No CLI command changes NTS groups yet, so `cli:` is not used here.
    - A server id may be up to 50 characters, the length of an OCPP instance, so the derived id of a server in a group with a 32-character name fits too. A server without an id gets `<group>-<n>` for its place n, or the next free number where a server of the group has that id. The uniqueness check covers derived ids too; a legal group that names no servers counts as `legal-1` to `legal-4`. GET shows each server with its id, the page sends the ids back (any save of the list fixes them), and a change of the ids is part of the change line (`server ids = …`).
    - `TryUpdateNTSConfigurations` reports in `out NTSGroup? Refused` which group caused a refusal (null where only the section as a whole is refused, e.g. an id in two groups), so the bridge can mark that group's entries `Rejected` and the others `Rolledback`. A group named twice is refused.
-   - Still open, as in SecureDNS B.4 point 4: reading the servers and writing them whole are two steps, and a server added on the page in between is lost. The bridge can catch that only once the read and the write share the lock.
+   - Still open, as in SecureDNS B.4 point 4: reading the servers and writing them whole are two steps, and a server added on the page in between is lost. The bridge can catch that only once the read and the write share the lock. *Closed in step 5*: `TryUpdateNTSConfigurations(Func<IReadOnlyList<NTSGroup>, …>)` asks the change for its parts under `reconfigureLock`, as `TryUpdateDNSConfiguration(Func<JObject, JObject?>)` does for DNS. The bridge compares each group's servers there with the ones the request read, and refuses the change as `ValueChanged` where they differ.
 5. **Pass AEAD through** (small): Norn has `NTSServerEndpoint.OfferedAEADAlgorithms`; the node needs the field `aead` per server and has to pass it on in `ToEndpoint()`.
 6. **A reporting threshold for offsets** (legal only): `offsetReportingThresholdSeconds`, the target of `ClockCtrlr.TimeAdjustmentReportingThreshold` (B.6).
 
@@ -343,6 +343,22 @@ The last case (compare-and-set) is what **really makes it irrelevant whether the
 - **`ACID`** (OCPP_CSE): All NTS entries of the request become one patch per group and then one call to `TryUpdateNTSConfigurations` (B.4 point 4). Groups added through `NTPController.ClientGroups` are created first, and groups removed through it are removed last. The result: everything `Accepted`, or the causing entries `Rejected` and all others `Rolledback`.
 - **`BASE`**: like ACID, but each group is atomic on its own.
 
+*As built in step 5 (2026-11-02)*:
+- **New instances.** An entry of `NTPClientController[<new id>]` or `NTPClientGroupController[<new id>]` would be `UnknownComponent` before the bridge sees it. So WWCP_OCPP asks an `INewInstancesSource` first (Achim's decision of 2026-11-02, a hook rather than placeholder instances). The bridge makes a stand-in for a server only where the request's `Clients` of a group names it, and for a group only where the request's `ClientGroups` names it. The stand-in is not added to the node, and GetVariables does not see it.
+- **IndependentRequests.** Each entry finds what the entries before it left. After `NtpServerUri[2] = ""`, the server that was `[3]` is `[2]`. With ACID and BASE all positions are those the request found.
+- **ACID and groups.** Groups are made and taken away around the one save of the groups' patches. If the save is refused, the groups made are taken away again. A group that cannot be taken away after the save is the one case where a change is left half done: its `ClientGroups` entry is `Rejected`, and the rest is `Accepted`, because it is in effect. A group is taken away only when it is switched off.
+- **BASE units.**
+  - A group is a unit with its servers.
+  - `ClockCtrlr` is in the unit of the legal group.
+  - `NTPController` and groups made by the request form one unit "groups".
+- **Hosts.**
+  - A server given another host keeps its id, priority, root pins, `onMismatch` and `trustOnFirstUse`, and loses its certificate pins, unless the same change sets them. This holds through `ServerURL` as well as through `NtpServerUri`.
+  - `ntp://` and every other scheme but `nts://` are refused.
+- **Interval and timeout.**
+  - `MinInterval` and `MaxInterval` are written as the one `checkEverySeconds`, and only when both are the same value. Setting one alone to another value is refused.
+  - `Timeout` cannot be emptied, because the node reads an empty one as "the file does not say".
+- **`TimeSource`** is accepted only as it reads.
+
 `servers` is always sent **whole**, because the node replaces lists whole: the current list with all changes from the request. One patch yields one log line per group, like saving on the page. If the node refuses, its sentence goes into `additionalInfo` (≤ 1024). `NotSaved` ⇒ `Rejected` with `InternalError`, the counterpart of the web API's 500/NotChanged. `RebootRequired` never occurs, because the node applies everything live. The admin role check in the SetVariables handler stays in front of all this.
 
 ### B.11 Certificates: `NetworkTimeRootCertificate` and `certificateGroup`
@@ -436,7 +452,44 @@ The alternatives that were weighed:
      - A group's or a server's JSON kept from the first read makes the change test red.
      - `ClockCtrlr` under the old name makes 5 of the 6 clock tests red.
    - The 2.1 suite passes 1970/1970. The station suite passes 578/578, SourceRules rerun with the artifacts inside the repo.
-5. **Bridge, writing**: IndependentRequests, then ACID/BASE (B.3 point 3), `NTPController.ClientGroups` and `ClockCtrlr.NtpServerUri` (B.6).
+5. **Bridge, writing**: IndependentRequests, then ACID/BASE (B.3 point 3), `NTPController.ClientGroups` and `ClockCtrlr.NtpServerUri` (B.6). *Built on 2026-11-02: WWCP_Node e05d41d, on top of 95b7e84, WWCP_OCPP a4e4182a, on top of d7e16490, and station 3e1de56, on top of d40fb26 (committed on 2026-11-03, not pushed yet)*, with the refinements noted under B.10. Contents:
+   - **WWCP_Node**:
+     - `TryUpdateNTSConfigurations` takes a change it asks for its parts under the lock (B.4 point 4).
+     - The overload with fixed parts goes through it.
+   - **WWCP_OCPP**:
+     - `INTPControllerSource` and `IClockControllerSource` say which variables they write.
+     - The NTP controllers and `ClockController` are ReadWrite there and hand every write to their source, as the DNS controllers do.
+     - `TryCheck` helpers say why a value does not fit the paper.
+     - `ControllerVariable.TryCheck` takes SequenceList and MemberList values.
+     - `INewInstancesSource`, with `NewInstanceLookupDelegate`, `DeviceModel.SetVariablesAsync(…, NewInstances)`, `AChargingStationNode.AddNewInstancesSource`/`NewInstanceOf`, and `TestChargingStationNode` passing it. Stand-ins come from `NTPClientGroupController.NewInstance` and `NTPClientController.NewInstance`.
+   - **Station**:
+     - `OCPP/NTSDeviceModel.Writing.cs` is the `ISetVariablesSource` and `INewInstancesSource` of the NTP controllers and of `ClockCtrlr`.
+     - It writes, through the node:
+       - `ClientGroups`.
+       - Of a group: `Enabled`, `Clients`, `MinServers`, `MaxDeviation`, `MinInterval`/`MaxInterval`, `Timeout`, `ErrorLogging`, `MaxErrors` and the three of legal time.
+       - Of a server: `Enabled`, `ServerURL`, `ServerPort`, `NTSKEServerPort`, `Priority`, the pins, `OnPinMismatch` and `TrustOnFirstUse`.
+       - Of `ClockCtrlr`: `NtpServerUri` and `TimeSource`.
+     - Each server is sent back with its id and `pinsAsShown`, as the page sends it.
+     - Compare-and-set: an `OldAttributeValue` that is no longer the value is `ValueChanged`.
+     - A variable set twice in one request is refused.
+     - Changes are written down as `ocpp:<sender>`.
+     - `ConfigureNTS` registers the model as the node's source of new instances.
+
+   Tests:
+   - WWCP_Node: 2 `NTSChangeTests` for the change under the lock.
+   - WWCP_OCPP: 3 `NewInstancesTests` over the wire, and 2 `NTPControllerTests` (a writing source's controllers and stand-ins; `TryCheck`).
+   - Station: 20 `NTSDeviceModelWritingTests` through the station's OCPP 2.1 node. The three written against the old `SetVariablesAsync` are red on station d40fb26, where every write is `ReadOnly`.
+   - The rest were checked by nine mutations, each making its tests red:
+     - In the node, the change asked for before the lock is taken.
+     - In WWCP_OCPP, the new-instance lookup not asked, and the group controller never ReadWrite.
+     - In the station:
+       - no check of the list under the lock;
+       - groups made not taken away again;
+       - a new `NtpServerUri` server in band 0;
+       - certificate pins kept across a rename;
+       - no compare-and-set;
+       - no check of a variable set twice.
+   - Full suites: node 1201/1201, 2.1 1976/1976, station 602/602, each with SourceRules rerun with the artifacts inside the repo.
 6. **Certificates** (B.3 point 7, B.11).
 7. **Monitoring and security events** (B.3 point 6, B.12).
 8. **1.6** (B.3 point 9, B.13).
