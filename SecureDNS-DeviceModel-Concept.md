@@ -343,11 +343,26 @@ The station answers InstallCertificate, GetInstalledCertificateIds and DeleteCer
 7. **Offline**: security events must be queued while the CSMS is unreachable, and with name resolution broken it is unreachable precisely when they matter. Whether WWCP_OCPP queues them is to be checked along with NTS concept B.3.
 8. **Manual edits** of the file take effect only at the next start, as before.
 
+*Done on 2026-11-03* (`ChargingStation.DNSEvents.cs`), through the NTS bridge's `TellCSMS` and queue:
+- A change by `web:…`, `cli:…` or `tofu` is `ReconfigurationOfSecurityParameters`, with `techInfo` = `dns: <the node's change line> (by <origin>)`. A change by `ocpp:…` is not told.
+- `Refused` is `InvalidNameServerCertificate`, `Tolerated` and `Recorded` are `NameServerPinMismatchTolerated` (with what the server is held to), and `CertificateChanged` is `NameServerCertificateChanged`. Each names the server and the fingerprints.
+- `Learned` is not told again: `LearnNameServerPin` tells its pin as a change by `tofu`, so the CSMS hears of it once (point 5). `BelievedAgain` stays in the log.
+- Every variable of both controllers supports monitoring (WWCP_OCPP), and every change and every news asks the monitors.
+- The node kept a judgement only after telling its news, so a monitor on `Problem` read the verdict before it. It now keeps it first (WWCP_Node), which serves the NTS monitors on `CertificateStatus` alike.
+- Point 7: the queue is the station's `OfflineQueue` on disk (NTS concept B.3), 1000 messages for 30 days.
+
 ### B.12 OCPP 1.6
 
 The same pattern applies to the keys of SDNS §3.2, once WWCP_OCPP can register keys with a getter and setter (NTS concept B.3 point 9). `GetConfiguration` computes the CSL values from the server list. `ChangeConfiguration` becomes one change of the section through the same method. The node always checks the **whole** resulting section, which is exactly what SDNS §3.2 asks for ("against the configuration as it would be after the change"). `dns.certificatePins.<n>` and `dns.rootPins.<n>` are resolved by the position in `dns.servers`.
 
 Limits: one key per request, so there is no exception for new servers. With the CSL rule "the last value repeats", a server added at the end of `dns.servers` takes the last transport of `dns.transports`, so an all-TLS list stays TLS; a mixed list passes through the last transport. Pins for the new server follow in a request of their own, and until then it is held to its chain only. The pre-flight (B.6) applies in 1.6 as well; `Rejected` carries no reason there. InstallCertificate with `NameServerRootCertificate` and `certificateGroup` goes through the same store.
+
+*Done on 2026-11-03* (`DNSDeviceModel.Keys16.cs`), on the pattern of NTS (`NTSDeviceModel.Keys16.cs`):
+- Every key of SDNS §3.2 but `dns.encryptedOnly`, which is NotSupported until B.4 point 6. The paper gained `dns.rootCAs` with it: without that key, a `certificateGroup` installed over 1.6 held no server to anything.
+- `dns.queryTimeouts` reads an empty or missing entry as the client's timeout, as `dns.ports` reads one as the transport's port. That is the paper's second exception to the CSL rules, since its table already said "empty: `dns.queryTimeout`".
+- A key becomes the SetVariables entries of `DNSClientController` and the slots, with ACID where it is several, and goes to the same model with the central system in its network path. So the checks, the pre-flight and the log line `(by ocpp:<id>)` are those of 2.1, and B.11 point 6 holds as well.
+- `dns.servers` changes addresses at their places, and pins stay with their slot. It adds servers at the end with the last server's `Transport`, `OnPinMismatch`, `TrustOnFirstUse` and `RootCAs`, but with no pins and with the default port and timeout. It empties the slots beyond its end; emptying all of them is refused by the node.
+- The station has one `DNSDeviceModel` for both OCPP nodes now, so one request at a time holds across the versions.
 
 ### B.13 Decisions
 
@@ -408,8 +423,31 @@ The shared steps are those of NTS concept B.15 and are built **once**. DNS is th
      - no source on the charge point;
      - `RootCAs` not written;
      - `RootCAs` not checked.
-7. **Monitoring and security events** (B.11).
-8. **OCPP 1.6** (B.12).
+7. **Monitoring and security events** (B.11). *Done on 2026-11-03.*
+
+   Tests:
+   - 9 `DNSEventsTests` in the station: a change on the page told to both versions dialled, one through OCPP not told back, a refusal told once, a mismatch told as refused, tolerated or recorded, another certificate, a learned pin told once, and monitors on the client and on a slot.
+   - `EveryVariableMayBeMonitored_Test` in WWCP_OCPP.
+   - `WhatIsNewsIsToldOnceTheJudgementIsKept` in the node.
+8. **OCPP 1.6** (B.12). *Done on 2026-11-03.*
+
+   Tests: 7 `DNSKeys16Tests`, covering the keys read from the node, a key changed as 2.1 changes its variable, the CSL rules with ACID, the two exceptions, `dns.servers`, the pins of the n-th server, and T19.
+
+   20 mutations for steps 7 and 8, each red in exactly its tests:
+   - the judgement kept after it is told (in the node, and in the station);
+   - a slot, and the client, not monitored;
+   - a change through OCPP told back;
+   - a refusal, a mismatch used all the same, or another certificate not told;
+   - a learned pin told again;
+   - the monitors not asked at a change, or at news;
+   - the service not tagged;
+   - a port left out repeating the one before;
+   - a new server taking nothing of the last;
+   - a list not changed as one;
+   - the central system not named;
+   - the first server's pins for every n;
+   - an empty entry not the one before;
+   - no keys on the charge point.
 9. **Equivalence tests**: the same change through `PUT /api/v1/configuration/dns` and through *SetVariables* yields the same file, the same state, and the same log except for `Origin`. Also SDNS T1–T18; emptying a slot and changing one behind it in the same request; the port rule; `pinsAsShown` against trust on first use between reading and writing; a compare-and-set conflict between the two paths; the pre-flight refusing name servers that cannot resolve the CSMS and `Enabled = false`; `NotSaved` (a read-only file) ⇒ `InternalError` with nothing in effect; after `BuildOCPPNodes` (an EVSE change) the components are still there.
 10. **Paper**: revised per A.6 in `bdfe66a`, and with the decisions of B.13 points 2 and 7 on 2026-10-29; point 10 remains, with the NTS concept.
 
