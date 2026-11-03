@@ -23,7 +23,7 @@ SDNS was written from this implementation, so Part A is shorter than in the NTS 
 | Default ports | 53 / 853 / 443 by transport | `DNSServerConfig.DefaultPortFor` (Hermod); the file's `port` is optional |
 | Strict profile | §2.2: a refused certificate ends the handshake, no fallback to UDP | ✔ the validator answers `Failed`, and no other transport is tried |
 | Order of the checks | §2.3: name, then chain, then pins; the name is never forgiven | `WWCPNode.JudgeServer` (`WWCPNode.ServerCertificates.cs:258–340`) |
-| Roots for name servers | `NameServerRootCertificate` | TLS roots of the node's store with usage `dns` (`TryAnchor`), plus a pinned root that the store holds as any kind |
+| Roots for name servers | `NameServerRootCertificate` | TLS roots of the node's store with usage `dns` (`TryAnchor`), plus a pinned root that the store holds as any kind; a server with a `rootGroup` only at the roots marked `dnsca-<group>` |
 | Pins | SHA-256 over the DER certificate or root, ≤ 16 each, with or without colons | `ServerPins`, `MaxPins = 16` |
 | `OnPinMismatch` | `Refuse` / `Record` / `Accept`; `Record` also into the metrological log | `PinMismatch`; `WriteDown` writes `recorded` as evidence |
 | Trust on first use | only from a certificate believed without a mismatch; nothing when a pin of that kind is set | `JudgeServer` (`:342–370`), `LearnNameServerPin` writes into the file under `reconfigureLock` |
@@ -63,7 +63,7 @@ SDNS was written from this implementation, so Part A is shorter than in the NTS 
 | `OnPinMismatch` | only with a pin or trust on first use | ✔ `ServerPins.TryParse` refuses `onMismatch`, even `refuse`, on a server held to nothing and learning nothing (`ServerPins.cs:325–332`). When the last pin goes on the page, `onMismatch` goes with it (`TryAfterAPageSaved`). |
 | `TrustOnFirstUse` | ✔ | ✔ The learned pin does **not** go through `ApplyDNSConfiguration`: no "DNS configuration changed" line, but "held to … from now on" from `WriteDown`. |
 | `AuthenticationName` | RFC 8310 ADN | **not implemented**: the certificate is checked against the address that is dialled. Hermod's `DNSServerConfig` has no field for it. |
-| `RootCAs` | a `certificateGroup` | **not implemented**: root pins instead, as decided for NTS on 2026-10-20 |
+| `RootCAs` | a `certificateGroup` | ✔ since 2026-11-03: the server's `rootGroup` (WWCP_Node `4e86012`, from NTS concept B.15 step 6), up to 24 letters, digits, `-` or `_`. Root pins narrow it further. |
 | `Enabled`, `Priority` | per server | **not implemented**: Hermod asks every server in one race |
 | `Problem`, `CertificateStatus`, `CertificateFingerprint`, `RootFingerprint` | ro | ✔ from `LastJudgementOf`. Judgements live in memory only, so after a restart these are empty until the next handshake. |
 | `KnownSince` | ro | ✔ `KnownServers`, persisted |
@@ -191,6 +191,8 @@ Points 1–9 of NTS concept B.3, built **once** for both bridges. For DNS, in ad
 7. **`ServerSource` writable**: remember the servers the node was constructed with, and read `"servers": null` in a save as "remove the key", as for `recursionDesired`.
 8. **Close connections when a root goes**: when a TLS root leaves the store or loses the usage `dns`, close the connections of the servers whose last judgement ended at it, as `ApplyDNSConfiguration` does for changed pins. Nothing subscribes to `CertificateStore.OnChanged` (`Certificates/CertificateStore.cs:219`) for this today.
 
+   *Done on 2026-11-03* (`NameServerRootsChanged` in `WWCPNode.NameServerCertificates.cs`): at every change of the store, a server whose last accepted judgement was anchored at a root of the store that no longer anchors it loses its connection and its judgement, with a line tagged `dns`, `certificates`, `security`. That covers a root deleted, switched off, no longer for `dns`, or no longer marked for the server's group. `TryAnchor` and this check take the anchors from the same `AnchorsFor`. A server believed through a root the machine trusts keeps its connection. NTS-KE is not touched.
+
 A stable server id as in NTS concept B.4 point 3 is not needed here, because slots are the instances (B.5; B.13 point 3).
 
 ### B.5 Components and instances
@@ -250,11 +252,12 @@ A timer that rolls back after the change does not help here: the open WebSocket 
 | `RootPins` | string[2500], ≤ 16 comma separated | rw | `rootFingerprint` and `rootFingerprints` | |
 | `OnPinMismatch` | OptionList `Refuse,Record,Accept` | rw | `onMismatch`, missing = `Refuse` | B.9 |
 | `TrustOnFirstUse` | OptionList `None,Root,Certificate` | rw | `trustOnFirstUse`, missing = `None` | the learned pin changes `RootPins`/`CertificatePins` without a request |
+| `RootCAs` | string[50] | rw | `rootGroup` | `""` ⇒ no group; a name the store cannot mark is refused before the node is asked; kept with the slot when its server changes (B.9) |
 | `Problem` | boolean | ro | `judgement.accepted` | `true` when a judgement exists and refused |
 | `CertificateStatus` | OptionList `Accepted,Recorded,Tolerated,PinMismatch,Untrusted,WrongName,NoCertificate` | ro | `judgement.outcome` | `""` before the first handshake, after a restart, and for unencrypted transports |
 | `CertificateFingerprint`, `RootFingerprint` | string | ro | `judgement.certificate`, `judgement.root` | |
 | `KnownSince` | dateTime | ro | `known.since` | |
-| `AuthenticationName`, `RootCAs`, `Enabled`, `Priority` | n/a | n/a | not implemented | not in the report ⇒ `UnknownVariable` until the node supports them |
+| `AuthenticationName`, `Enabled`, `Priority` | n/a | n/a | not implemented | not in the report ⇒ `UnknownVariable` until the node supports them |
 
 An empty slot reports `""` for every variable.
 
@@ -311,6 +314,14 @@ The station answers InstallCertificate, GetInstalledCertificateIds and DeleteCer
 - **GetInstalledCertificateIds**(`NameServerRootCertificate`) lists the roots that vouch for name servers: usage `dns`, whether imported through OCPP or the web page, and roots without a usage. **DeleteCertificate** on a root without a usage ⇒ `Failed`, because it would be gone for every service; that is done locally.
 - **DeleteCertificate** of a root that a configured server's chain ends at ⇒ the pre-flight of B.6 with the store as it would be afterwards. A refusal ⇒ `Failed`.
 - Installing and deleting are logged with the tags `dns`, `certificates`, `security`. `TryAnchor` reads the store at every handshake, so a changed root counts from the next one. Nothing closes an open connection when a root goes, though, and connections stay open for long (B.4 point 8).
+
+*Done on 2026-11-03* as `DNSRootCertificates` in the station (`ChargingStation/OCPP/DNSRootCertificates.cs`), an `ICertificateSource` registered on the OCPP 2.1 and the OCPP 1.6 node, after `NTSRootCertificates`:
+- **InstallCertificate** marks a group as `dnsca-<g>` (a name the store cannot mark is `Rejected`). The root is labelled as the store labels it, by its common name, not by `G`. A root installed again keeps what it was for and gains `dns` and the mark.
+- **GetInstalledCertificateIds** and **DeleteCertificate** as above. A root kept for another service loses `dns` and its `dnsca-` marks and stays for that service.
+- **DeleteCertificate names a certificate, not a type**: `CertificateSources` deletes it from every source that holds it, after asking all of them. A root for name and time servers is therefore deleted for both, and the check of either one can keep it.
+- **The check before a deletion** is the one B.6 makes for a change: when the CSMS is dialled by a name and some name server is asked over TLS, the names are resolved twice, with the store as it is and without the root (`ResolveWithAsync(…, WithoutRoots)`, which `JudgeServer` passes to `TryAnchor`). A name that resolves now and would not then keeps the root: `Failed` with `CSMSUnreachable` (SDNS T21). For this, the shared `ICertificateSource.CheckDeletion` became `CheckDeletionAsync`, agreed with the NTS session.
+- **`RootCAs`** of `DNSServerController` is the server's `rootGroup` (B.8).
+- **The rule for other root types** needs nothing more: they stay in WWCP_OCPP's `InMemoryCertificates` and never reach the node's store, so they vouch for no name server.
 
 ### B.11 Node → OCPP: changes from elsewhere
 
@@ -381,8 +392,22 @@ The shared steps are those of NTS concept B.15 and are built **once**. DNS is th
    - The node has the dry run.
    - The station's `DNSDeviceModel` writes through `TryUpdateDNSConfiguration`.
 
-   B.4 points 1 to 4 followed on 2026-11-02 (step 2). Still open are B.4 points 6 to 8.
-6. **Certificates** (B.10), through the shared store interface, with B.4 point 8.
+   B.4 points 1 to 4 followed on 2026-11-02 (step 2). Still open are B.4 points 6 and 7.
+6. **Certificates** (B.10), through the shared store interface, with B.4 point 8. *Done on 2026-11-03*, with `RootCAs`.
+
+   Tests:
+   - 5 more `NameServerPinningTests` cases in the node: a root that goes or no longer vouches takes its connections along, another root does not, and the dry run without a root, for a root for `dns` and for one of a group.
+   - 7 `DNSRootCertificatesTests` in the station, with T21 against a name server over TLS on the loopback.
+   - `RootCAsIsTheGroupOfRootsAServerIsHeldTo` in `DNSDeviceModelWritingTests`.
+   - 8 mutations, each red in its tests:
+     - the roots left out ignored;
+     - the store not followed;
+     - every connection let go of;
+     - no check before a deletion;
+     - the root not left out of that check;
+     - no source on the charge point;
+     - `RootCAs` not written;
+     - `RootCAs` not checked.
 7. **Monitoring and security events** (B.11).
 8. **OCPP 1.6** (B.12).
 9. **Equivalence tests**: the same change through `PUT /api/v1/configuration/dns` and through *SetVariables* yields the same file, the same state, and the same log except for `Origin`. Also SDNS T1–T18; emptying a slot and changing one behind it in the same request; the port rule; `pinsAsShown` against trust on first use between reading and writing; a compare-and-set conflict between the two paths; the pre-flight refusing name servers that cannot resolve the CSMS and `Enabled = false`; `NotSaved` (a read-only file) ⇒ `InternalError` with nothing in effect; after `BuildOCPPNodes` (an EVSE change) the components are still there.
