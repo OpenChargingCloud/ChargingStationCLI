@@ -224,6 +224,12 @@ Because only the first subscriber is dispatched, these hooks must sit **inside**
 5. **Pass AEAD through** (small): Norn has `NTSServerEndpoint.OfferedAEADAlgorithms`; the node needs the field `aead` per server and has to pass it on in `ToEndpoint()`.
 6. **A reporting threshold for offsets** (legal only): `offsetReportingThresholdSeconds`, the target of `ClockCtrlr.TimeAdjustmentReportingThreshold` (B.6).
 
+   *Built on 2026-11-03*, with Achim's decisions of the same day: reported when the threshold is reached, five seconds where nothing says otherwise, and switched off by an empty value.
+   - The key takes whole seconds from 1 to 86400, or `false` for never. A page's emptied field (`""`) is never as well. The key left out is the five seconds of STS §2.2, so never is written down as `false`, not by removing the key. Only the legal group may say it, like the other legal keys.
+   - The node does not set its clock, so the threshold applies to the measured offset, as STS §2.2 allows. A check that finds the clock at least the threshold off is written into the metrological log as `Critical` (tags `offset`, `security`) and raised as `OnNTSOffsetReached(NTSGroup, TimeSpan Offset)`.
+   - That is said once. The next check that finds the clock closer is written down as "within … again" (`Notice`), and only after it is the threshold reached anew. A persisting offset is the same offset, and at a check every 15 minutes it would otherwise be 96 events a day. New servers do not make it new; a threshold switched off forgets that it was reached.
+   - A change of the threshold is a change line of its own ("offsets reported from 7 s", "offsets not reported"). The page edits it on the legal card, where an empty field is never.
+
 ### B.5 Components and instances
 
 | OCPP component | Instance | In the node | Life cycle |
@@ -257,7 +263,8 @@ A standard CSMS knows only `ClockCtrlr`. The bridge fills it from the legal grou
   - All nine indexes are in the report, and those beyond the servers asked read empty, as the DNS slots do. The first empty one shows where a server can be added.
   - A server reads as `nts://host`, with `:port` where its NTS-KE port is not 4460.
   - A node without a legal group reads nine empty ones.
-  - `TimeAdjustmentReportingThreshold`, `TimeOffset` (with and without the instance `NextTransition`), `TimeZone` and `NextTimeOffsetTransitionDateTime` are left out until the node has them, so a CSMS reads them as unknown.
+  - `TimeOffset` (with and without the instance `NextTransition`), `TimeZone` and `NextTimeOffsetTransitionDateTime` are left out until the node has them, so a CSMS reads them as unknown.
+  - `TimeAdjustmentReportingThreshold` came with B.4 point 6 (2026-11-03). It reads the legal group's threshold in whole seconds, and "" where it is never or there is no legal group. A write goes into the legal group's patch, with its `NtpServerUri` entries under ACID. "" is never (`false` in the file), and below 1 or above 86400 is `ValueOutOfRange` (`MinLimit`/`MaxLimit` of the variable in WWCP_OCPP).
 - **`[k] = host` at an existing position** replaces that server's host name, and its NTS-KE port when the value is `nts://host:port`. The entry keeps its id, priority, root pins, `onMismatch` and `trustOnFirstUse`, and loses its certificate pins, which name the old server's certificate. The diff line in the metrological log shows both.
 - **`[n+1] = host`** adds a server with that host name, enabled, with the default ports, in the band of the last server (with its priority), so it counts towards the same quorum. An index beyond `n+1` ⇒ `Rejected`, with the next free index in `additionalInfo`.
 - **`[k] = ""`** removes the k-th server, and the later ones move up one index. If the node refuses, e.g. because fewer servers would be enabled than an explicit `minServers`, its sentence goes into `additionalInfo`.
@@ -413,7 +420,7 @@ The station answers InstallCertificate, GetInstalledCertificateIds and DeleteCer
   - Point 5 covers every group and a group added or removed, as STS 3.2.6 says. A pin learned on first use counts too, through `OnNTSGroupChanged` by `tofu`.
   - Point 4 is `LegalTimeLimited`/`LegalTimeRestored`.
   - `OnServerNews` of a time server: `Refused` ⇒ `InvalidTimeServerCertificate`, `CertificateChanged` ⇒ `TimeServerCertificateChanged`.
-  - Point 6 (`SettingSystemTime`) still waits for B.4 point 6.
+  - Point 6 is `SettingSystemTime` since B.4 point 6 (2026-11-03), on `OnNTSOffsetReached`, with "nts.groups.legal: the clock is +7.008 s off, the threshold is 5 s" as `techInfo`. It is told once per reaching, not at every check.
   - An event goes to each OCPP node that a configured connection uses, never to a node nothing dials.
 - **The queue** (Achim's decision of 2026-11-03: on disk):
   - `OfflineQueue` keeps security events and monitor events in `ocpp-queue/queue-2.1.jsonl` and `queue-1.6.jsonl` beside the configuration, until the CSMS takes them, across restarts.
@@ -438,7 +445,8 @@ The same pattern applies to the keys from STS §3.3, once WWCP_OCPP can register
   - Servers beyond the end are taken away.
 - **One interval.** `minInterval` and `maxInterval` each set the node's one interval, because 1.6 cannot set both at once.
 - **Mode.** `mode` takes `NTSv4` alone.
-- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are the delay asymmetries, preflight, `ntske.<g>.servers`, the cookie refresh, `aead`, `signedResponses`, `ntp.reboot.*` and `ntp.timeAdjustmentReportingThreshold`.
+- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are the delay asymmetries, preflight, `ntske.<g>.servers`, the cookie refresh, `aead`, `signedResponses` and `ntp.reboot.*`.
+- **The threshold.** `ntp.timeAdjustmentReportingThreshold` came with B.4 point 6 (2026-11-03). It is `ClockCtrlr.TimeAdjustmentReportingThreshold` and so the legal group's, listed where there is a legal group. It reads "5" by default and "" for never, and an empty value switches the report off.
 
 ### B.14 Decisions
 
