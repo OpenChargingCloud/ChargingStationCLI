@@ -403,6 +403,24 @@ The station answers InstallCertificate, GetInstalledCertificateIds and DeleteCer
 7. **No echo**: The bridge's own changes carry `Origin = ocpp:…`, so point 5 does not apply to them. Monitors fire nevertheless, because the node normalizes (host names, a lowered quorum, a removed authority).
 8. **Manual edits** of the file take effect only at the next start, as before. The projection is built from the node at start, so the two cannot drift apart.
 
+*As built in step 7 (2026-11-03)*:
+- **Monitors** (WWCP_OCPP `VariableMonitors`):
+  - `Delta`, `UpperThreshold` and `LowerThreshold` can be set on a variable that supports monitoring. The NTP controllers' variables do, and so do `ClockCtrlr`'s, all but `DateTime`.
+  - The monitors watch nothing themselves. `CheckMonitorsAsync` reads each monitored value and compares it with what its monitor saw last. The bridge asks after every node event, and the node asks itself every 10 s, because `LegalTime`, `LastCheck` and `Limited` change without a node event.
+  - No copy of a value is kept, only each monitor's last value. That is point 3's "last reported state", per monitor.
+  - Monitors are kept in memory. The CSMS sets them again after a restart.
+- **Security events** (`ChargingStation.NTSEvents.cs`):
+  - Point 5 covers every group and a group added or removed, as STS 3.2.6 says. A pin learned on first use counts too, through `OnNTSGroupChanged` by `tofu`.
+  - Point 4 is `LegalTimeLimited`/`LegalTimeRestored`.
+  - `OnServerNews` of a time server: `Refused` ⇒ `InvalidTimeServerCertificate`, `CertificateChanged` ⇒ `TimeServerCertificateChanged`.
+  - Point 6 (`SettingSystemTime`) still waits for B.4 point 6.
+  - An event goes to each OCPP node that a configured connection uses, never to a node nothing dials.
+- **The queue** (Achim's decision of 2026-11-03: on disk):
+  - `OfflineQueue` keeps security events and monitor events in `ocpp-queue/queue-2.1.jsonl` and `queue-1.6.jsonl` beside the configuration, until the CSMS takes them, across restarts.
+  - It holds at most 1000 messages for at most 30 days. When full, monitor events go before security events.
+  - Queues and monitors belong to the station and are handed to every node built for it.
+  - techInfo is cut at 255 characters, and the log keeps it whole.
+
 ### B.13 OCPP 1.6
 
 The same pattern applies to the keys from STS §3.3, once WWCP_OCPP can register keys with a getter and setter (B.3 point 9). `GetConfiguration` computes the CSL values from the groups. `ChangeConfiguration` becomes a patch for `TryUpdateNTSConfiguration`, and the bridge takes over the paper's CSL rules (a list that is too short ⇒ the last value keeps applying, one that is too long ⇒ an error). Limits: ChangeConfiguration carries one key per request, so bundling is impossible. `ntp.legal.servers` and `ntp.legal.minServers` must therefore come in an admissible order, and `Rejected` carries no reason. In 1.6, pins and new groups stay reserved to the web page. InstallCertificate with `certificateGroup` exists in 1.6 as well (STS extends the 1.6 Security Extensions with it) and goes through the same store.
@@ -525,7 +543,21 @@ The alternatives that were weighed:
      - in WWCP_OCPP: deleting without asking every source first, a serial with its leading zeros, the same root of two groups listed twice;
      - in the station: no mark, a shared root deleted outright, roots for every use not listed, the group not written, and the station's check of a group's name.
    - Full suites: node 1207/1207, frontend 667/667, 2.1 1981/1981, 1.6 639/639, station 609/609, SourceRules with the artifacts inside the repos.
-7. **Monitoring and security events** (B.3 point 6, B.12).
+7. **Monitoring and security events** (B.3 point 6, B.12). *Built on 2026-11-03: WWCP_OCPP 6acdfa63, on top of 17777861, and station 000073a, on top of a2cf884 (committed, not pushed yet)*, as noted under B.12. Contents:
+   - **WWCP_OCPP**:
+     - `VariableMonitors` and the five monitoring handlers of `TestChargingStationNode`, which used to accept everything and keep nothing. A NotifyMonitoringReport follows GetMonitoringReport.
+     - `CheckMonitorsAsync` and `VariableChanged` on `AChargingStationNode`, and `ToVariableConfig(…, Monitored)`.
+     - `OfflineQueue` in `WWCP_OCPP_Common`. `QueueSecurityEventAsync` and `QueueEventsAsync` on the 2.1 node, `QueueSecurityEventAsync` on the 1.6 charge point, retried at the nodes' maintenance.
+     - The seven security events of STS 3.2.6 and SDNS 3.1.4, in both versions.
+   - **Station**: `ChargingStation.NTSEvents.cs`, and the queues and monitors handed to the nodes.
+
+   Tests:
+   - WWCP_OCPP: 7 `VariableMonitoringTests` over the wire (one of them an event kept while the CSMS was away and sent after a restart, from the file), 3 `OfflineQueueTests`, and 2 `SecurityEventTests` for 1.6. `GetMonitoringReport_Test` expects `EmptyResultSet` for a component without monitors.
+   - Station: 6 `NTSEventsTests`.
+   - 17 mutations, each red in its tests:
+     - in WWCP_OCPP: a delta told at every check, a number told at any move, a threshold never cleared, monitoring a variable that does not support it, no duplicates found, the level ignored, a security event let go before a monitor event, no age, a message taken that nobody took (2.1 and 1.6), and a techInfo not cut;
+     - in the station: a change through OCPP told back, a version told that nothing dials, another group's limit told, refused certificates not told, monitors not asked after a change, and a station dialling nothing queueing all the same.
+   - Full suites: 2.1 1991/1991, 1.6 641/641, station 615/615. The node is as in step 6.
 8. **1.6** (B.3 point 9, B.13).
 9. **Equivalence tests**: The same change through `PUT /nts/groups/{id}` and through SetVariables must yield **the same file** and **the same state** (and the same log, except for `Origin`). Plus round trips from the web page to GetVariables and from SetVariables to `GET /nts/groups/{id}`, and a compare-and-set conflict between the two paths.
 10. **Papers**: revise them per A.6, B.5–B.9 and the decisions of B.14 (done on 2026-10-30, see A.6); then apply the pattern to `webPayments` (B.2).
