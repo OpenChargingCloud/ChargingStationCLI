@@ -2,6 +2,8 @@
 
 As of 2026-11-03, with the decisions of the same day in Part 3. Code: WWCP_Node `e05d41d`, Hermod `f3c0517c`, ChargingStation `3e1de56`.
 
+Built on the same day (Part 4). Where the code went another way than this concept first said, the text below now says what was built: the limits (2.3), WinSCP's temporary name (2.4, F9), the kiosk's URL (2.4), `NodeSftpFileSystem` without `LocalSftpFileSystem` (2.8) and the TestKit's hook for the log files (2.8).
+
 **Goal.** Every node already serves its command line over SSH. What is missing is the `sftp` subsystem, so that files can be moved efficiently in both directions: up, for example the logos of e-mobility providers that the display shows after a card is swiped; down, for example the log files. Not everybody may move everything: the node's role model decides who may read and who may write what.
 
 Part 1 describes what is there, Part 2 the design, Part 3 the questions to decide, Part 4 the steps.
@@ -88,8 +90,9 @@ An `SftpArea` (WWCP_Node), declared before the node starts:
 | `Shows` | Which names are shown and readable: an allowlist (e.g. day files only), never "the whole directory" |
 | `Read` | What listing and downloading need |
 | `Write` | What uploading, replacing and removing need; none = read-only for everybody |
-| `Accept` | The owner's check: the name at open, the content at close; a refusal is a sentence |
-| `Limits` | Largest file, most files |
+| `AcceptName`, `AcceptContent` | The owner's check: the name at open, the content at close; a refusal is a sentence |
+| `Replaces` | The files a new one takes away: one picture to a provider, so `ionity.svg` takes `ionity.png` |
+| `MaxFileSize`, `MaxFiles` | Largest file, most files |
 | `Changed` | Raised after a file was put in place or removed |
 
 The root `/` lists the areas the account may read or write, and only those. Opening an area the account may not read is refused with a sentence that says what it needs.
@@ -113,14 +116,15 @@ The areas proposed now:
 |---|---|---|---|---|---|
 | `/logs` | node | `LogPath` | `<prefix>-yyyy-MM-dd.log` | the log's permission, `ToReadTheLog` (F2) | nobody |
 | `/logs/metrological` | node | `MetrologicalLog.Path` | the day files and `signing-key.pub.pem`; never `signing-key.pem` | as `/logs` | nobody |
-| `/logos` | station | `logos/` beside the configuration file, as `ssh/` | see 2.4 | `providers:read` (F3) | `providers:edit` (F3) |
+| `/logos` | station | `logos/` beside the configuration file, as `ssh/` | `operator.<ext>`, see 2.4 | `providers:read` (F3) | `providers:edit` (F3) |
+| `/logos/providers` | station | `logos/providers/` | `<provider id>.<ext>`, see 2.4 | as `/logos` | as `/logos` |
 
 ### 2.3 Sessions
 
 - **Hermod (G1).** `SshServerOptions` gets a per-session factory: given the signed-in session, it returns the file system, the profile, the limits and a token that ends the session, or null for "refused". The server-wide properties stay for the simple case.
 - **Node.** For `subsystem sftp`: the account as in `ServeShellAsync`; a `NodeSftpFileSystem` for that account over the areas; the same re-check as the shell, at every operation and every `SSHSessionRecheckEvery` (G3); the session among the SSH sessions with its kind, `cli` or `sftp`, so that `who` and the SSH server page show it (G4).
 - **Log.** At the start: "'cpo1' opened SFTP from 192.0.2.7." At the end, one line: "'cpo1' left SFTP after 3 min: 2 file(s) up (310 KiB), 1 down (1.4 MiB)." Each upload and removal as a notice, each download as one line when its handle is closed, not one per read.
-- **Limits.** `SftpLimits` per session from the areas' limits; no bandwidth cap by default.
+- **Limits.** An area's limits are checked by `NodeSftpFileSystem` itself, at every write and at `OPEN`: a write past `MaxFileSize` is refused and the upload thrown away, and a new file past `MaxFiles` is refused. Hermod's `SftpLimits` is not used for them: when a limit is overrun, it closes the upload, which would put it in place, and then removes the target. No bandwidth cap.
 
 ### 2.4 Logos
 
@@ -137,7 +141,8 @@ Layout:
 - **Bound by name (F4).** The name must be `operator` or the id of a provider in the configuration file; anything else is refused at `OPEN`, before a byte is sent, with the known ids in the sentence. A provider id that is no file name (`/`, `\`, `..`, control characters) cannot have a file.
 - **Limits (F5).** At most 512 KiB and 2048×2048 pixels (read from the header), at most `MaxProviders + 1` files.
 - **SVG (F5).** Refused when it holds `<script>`, `<foreignObject>`, event attributes (`on…`), or references anything outside itself (`href`/`xlink:href` other than `#…`, `@import`, `url(http…)`). Served with `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox` and `X-Content-Type-Options: nosniff`.
-- **Served.** On the kiosk's port, `GET /logos/<path>`, without sign-in: the screen is public and shows the picture anyway. `ETag` is the SHA-256; the kiosk's JSON says `"logo": "/logos/providers/ionity.svg?v=<8 hex digits>"`.
+- **WinSCP's temporary name (F9).** WinSCP uploads a file above 100 KB as `<name>.filepart` and renames it when it is done. Where `<name>` may be written, such an upload is checked at `CLOSE` as `<name>` would be, and then held for the session: its `STAT` sees it, no listing does. Renamed to `<name>`, it is put in place over the file of that name. One that is never renamed is thrown away with the session.
+- **Served.** On the kiosk's port, under the kiosk API's path: `GET /api/kiosk/logos/<name>` and `/api/kiosk/logos/providers/<name>`, without sign-in, since the screen is public and shows the picture anyway. `ETag` is the SHA-256, and a kiosk that has the picture gets a 304. The kiosk's JSON says `"logo": "/api/kiosk/logos/providers/ionity.svg?v=<8 hex digits>"`. A name the area does not show is a 404; a path that climbs out of the folder is refused by Hermod with a 400 before any route.
 - **Precedence (F4).** A file wins over the configuration file's `logo`; the URL or `data:` URI there stays as the fallback, and nothing written so far changes its meaning.
 - **Changed.** The display shows the new logo at the next swipe, without a restart.
 - **Log.** "'cpo1' put up the logo of 'ionity' over SFTP from 192.0.2.7: ionity.svg, 12 KiB, SHA-256 ab12…", tags `sftp`, `providers`. Removal likewise.
@@ -168,11 +173,12 @@ As a branch with a pull request, as Hermod's changes go.
 ### 2.8 WWCP_Node
 
 - `SftpArea`, `WWCPNode.SftpAreas` and `AddSftpArea` for a kind before the start.
-- `NodeSftpFileSystem`: the virtual root, a `LocalSftpFileSystem` per area for its root jail, the gates of 2.2, staging and the rename into place.
+- `NodeSftpFileSystem`: the virtual root, the gates of 2.2, the limits of 2.3, staging and the rename into place. It works on each area's files by name and keeps them inside its directory itself (`SftpArea.FileOf`). It uses no `LocalSftpFileSystem`, whose constructor creates its root directory: a session that only looks would make an area's folder, such as `metrological` where no metrological log is written. A writable area's folder is made at its first upload.
 - `WWCPNode.SSH.cs`: the factory, the re-check, the sessions with their kind, `Audited`'s sentence, the class comment.
 - The `/logs` area.
 - `ssh.sftp` in `SSHConfiguration`, the SSH server page and its route.
-- The TestKit's conformance tests, over Hermod's `SftpClient`: an account without the log's permission sees no `/logs`; a viewer downloads a day file; nobody writes, removes or renames in `/logs`, an administrator included; `signing-key.pem` can be neither listed nor opened, nor reached by `..`; a session ends when its account is switched off during a transfer; the subsystem is refused while `ssh.sftp` is not `true`, which is the default, and open sessions end when it is switched off.
+- The TestKit's conformance tests, over Hermod's `SftpClient`: an account without the log's permission sees no `/logs`; a viewer downloads a day file; nobody writes, removes or renames in `/logs`, an administrator included; `signing-key.pem` can be neither listed nor opened, nor reached by `..`; a session ends when its account is switched off during a transfer; the subsystem is refused while `ssh.sftp` is not `true`, which is the default, and open sessions end when it is switched off. The cases about the log files need a node that writes them; a kind gives one through the virtual `NewNodeWritingLogFiles`, and where it gives none they are inconclusive.
+- `SftpUploadTests` in WWCP_Node_Tests, over an area of notes of their own, since no area of the node itself is written: staging, refusal, limits, `Replaces`, F9's held upload, times only, and the leftovers of a crash removed at the next start.
 - Shared code: the vehicle gets SFTP with `/logs` at the same time. Announced before it lands.
 
 ### 2.9 ChargingStation
@@ -206,6 +212,7 @@ Decided by Achim on 2026-11-03. F1 and F3 differ from what this concept first re
 | F6 | May an administrator remove old log files over SFTP? | **No.** | Logs are evidence, the metrological ones under calibration law; how long they are kept is the node's to decide, not a session's. |
 | F7 | Does reading `/logs/metrological` need more than reading `/logs` (e.g. `calibration:read`)? | **No.** | The signed log is meant to be checked by others; it is tamper-evident, not secret. |
 | F8 | More areas now (firmware, diagnostics, …)? | **No**, see 2.10. | |
+| F9 | WinSCP uploads a file above 100 KB as `<name>.filepart` and renames it when it is done, while `/logos` takes only known names. Refuse that name, or hold the upload? | **Held in the session** (2.4). | Nobody has to change WinSCP's settings, and the check still comes before the file replaces the one there. Asked while step 2 was built. |
 
 ---
 
@@ -218,3 +225,9 @@ Decided by Achim on 2026-11-03. F1 and F3 differ from what this concept first re
 5. **Superproject**: the station advanced.
 
 Each step is committed on its own and builds and passes its tests on its own.
+
+Done on 2026-11-03:
+- Step 1: Hermod `1dcbdb06`, the merge of Vanaheimr/Hermod#220.
+- Step 2: WWCP_Node `507ebf7`, and `08c7b3f` for F9 and the upload tests.
+- Step 4: ChargingStation `b952b24`.
+- Steps 3 and 5: one superproject commit pins all three, since both were ready.
