@@ -544,7 +544,7 @@ The alternatives that were weighed:
        - no compare-and-set;
        - no check of a variable set twice.
    - Full suites: node 1201/1201, 2.1 1976/1976, station 602/602, each with SourceRules rerun with the artifacts inside the repo.
-6. **Certificates** (B.3 point 7, B.11). *Built on 2026-11-03: WWCP_Node 4e86012, on top of e05d41d, WWCP_OCPP 17777861, on top of 92578632, and station a2cf884, on top of 3e1de56 (committed, not pushed yet)*, with the decision and the refinements noted under B.11. Contents:
+6. **Certificates** (B.3 point 7, B.11). *Built on 2026-11-03: WWCP_Node 4e86012, on top of e05d41d, WWCP_OCPP 17777861, on top of 92578632, and station a2cf884, on top of 3e1de56 (pushed and pinned on 2026-11-03)*, with the decision and the refinements noted under B.11. Contents:
    - **WWCP_Node**: `ServerPins.RootGroup` and `MarkOf`, the group in `JudgeServer` and `TryAnchor`, and the group on the page (`pins.ts`, `pinViews.ts`).
    - **WWCP_OCPP**: `ICertificateSource`, `CertificateSources`, `InMemoryCertificates` and `CertificateHashes` in `WWCP_OCPP_Common`. The certificate handlers of `TestChargingStationNode` (2.1) and `TestChargePointNode` (1.6) go through them. `NameServerRootCertificate` is added, and `NetworkTimeRootCertificate` in `GetCertificateIdUse`.
    - **Station**: `OCPP/NTSRootCertificates.cs`, registered in `ConfigureNTS` for both nodes. `NTPClientController.RootCAs` is read and written as `rootGroup`.
@@ -558,7 +558,7 @@ The alternatives that were weighed:
      - in WWCP_OCPP: deleting without asking every source first, a serial with its leading zeros, the same root of two groups listed twice;
      - in the station: no mark, a shared root deleted outright, roots for every use not listed, the group not written, and the station's check of a group's name.
    - Full suites: node 1207/1207, frontend 667/667, 2.1 1981/1981, 1.6 639/639, station 609/609, SourceRules with the artifacts inside the repos.
-7. **Monitoring and security events** (B.3 point 6, B.12). *Built on 2026-11-03: WWCP_OCPP 6acdfa63, on top of 17777861, and station 000073a, on top of a2cf884 (committed, not pushed yet)*, as noted under B.12. Contents:
+7. **Monitoring and security events** (B.3 point 6, B.12). *Built on 2026-11-03: WWCP_OCPP 6acdfa63, on top of 17777861, and station 000073a, on top of a2cf884 (pushed and pinned on 2026-11-03)*, as noted under B.12. Contents:
    - **WWCP_OCPP**:
      - `VariableMonitors` and the five monitoring handlers of `TestChargingStationNode`, which used to accept everything and keep nothing. A NotifyMonitoringReport follows GetMonitoringReport.
      - `CheckMonitorsAsync` and `VariableChanged` on `AChargingStationNode`, and `ToVariableConfig(…, Monitored)`.
@@ -573,7 +573,7 @@ The alternatives that were weighed:
      - in WWCP_OCPP: a delta told at every check, a number told at any move, a threshold never cleared, monitoring a variable that does not support it, no duplicates found, the level ignored, a security event let go before a monitor event, no age, a message taken that nobody took (2.1 and 1.6), and a techInfo not cut;
      - in the station: a change through OCPP told back, a version told that nothing dials, another group's limit told, refused certificates not told, monitors not asked after a change, and a station dialling nothing queueing all the same.
    - Full suites: 2.1 1991/1991, 1.6 641/641, station 615/615. The node is as in step 6.
-8. **1.6** (B.3 point 9, B.13). *Built on 2026-11-03: WWCP_OCPP bce7a870, on top of 6acdfa63, and station dd5ebd2, on top of 000073a (committed, not pushed yet)*, as noted under B.13. Contents:
+8. **1.6** (B.3 point 9, B.13). *Built on 2026-11-03: WWCP_OCPP bce7a870, on top of 6acdfa63, and station dd5ebd2, on top of 000073a (pushed and pinned on 2026-11-03)*, as noted under B.13. Contents:
    - **WWCP_OCPP**:
      - `IConfigurationKeySource` for the 1.6 charge point (`AddConfigurationKeySource`). It computes its keys when asked, resolves a named key live, and answers a change, or says the key is not its own.
      - Sources are asked before the charge point's own keys.
@@ -588,7 +588,7 @@ The alternatives that were weighed:
      - in WWCP_OCPP: a named key not asked of the sources, the list without them, a write-only value shown, a change not handed on;
      - in the station: a short list not repeating its last value, a longer one taken, an empty entry not taking the one before it, a new server not taking the last one's settings, servers beyond the end kept, one interval set alone, every mode taken, a pin key too many, the legal keys for every group.
    - Full suites: 1.6 643/643, station 620/620. 2.1 and the node are as in step 7.
-9. **Equivalence tests**: The same change through `PUT /nts/groups/{id}` and through SetVariables must yield **the same file** and **the same state** (and the same log, except for `Origin`). Plus round trips from the web page to GetVariables and from SetVariables to `GET /nts/groups/{id}`, and a compare-and-set conflict between the two paths. *Built on 2026-11-03: station 9647436, on top of dd5ebd2 (committed, not pushed yet)*. It holds tests only: 4 `NTSEquivalenceTests`.
+9. **Equivalence tests**: The same change through `PUT /nts/groups/{id}` and through SetVariables must yield **the same file** and **the same state** (and the same log, except for `Origin`). Plus round trips from the web page to GetVariables and from SetVariables to `GET /nts/groups/{id}`, and a compare-and-set conflict between the two paths. *Built on 2026-11-03: station 9647436, on top of dd5ebd2 (pushed and pinned on 2026-11-03)*. It holds tests only: 4 `NTSEquivalenceTests`.
    - The page's PUT goes to a started station that is signed in. SetVariables and the 1.6 keys go to twins built from the same configuration.
    - For a group's settings, all three leave the same `nts` section in the file and the same group in the node. The page and SetVariables leave the same log line, apart from the origin.
    - Servers sent whole by the page, with `pinsAsShown`, and the same changes made through SetVariables leave the same servers.
