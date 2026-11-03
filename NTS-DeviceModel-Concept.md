@@ -366,10 +366,31 @@ The last case (compare-and-set) is what **really makes it irrelevant whether the
 The station answers InstallCertificate, GetInstalledCertificateIds and DeleteCertificate for `NetworkTimeRootCertificate` through the store interface from B.3 point 7, backed by the node's `CertificateStore`.
 
 - **InstallCertificate**(`NetworkTimeRootCertificate`, `certificateGroup = G`) ⇒ a TLS root in the node's store with usage `nts` and a group mark `ntsca-<g>`. Usages are `[a-z][a-z0-9_-]*` with ≤ 32 characters, so a `certificateGroup` that cannot be mapped ⇒ `Rejected`. The event goes to the metrological log (STS §3).
-- **`NTPClientController.RootCAs = G`** ⇒ the bridge resolves `G` into the fingerprints of all roots with the mark `ntsca-<g>`. It writes them as `roots[]` pins, and `G` as `rootGroup`, into the server entry. This keeps the node's rule: pins **narrow** and never widen.
-- **A new or deleted certificate in G** (through OCPP or the web page) ⇒ the bridge recomputes `roots[]` of all servers with `rootGroup = G`. This goes through `TryUpdateNTSConfiguration`, so it comes with a log line and with dropping the key exchange, which the node does on changed pins anyway.
-- **`RootCAs` empty** ⇒ no root pins. The node's rule applies (the machine's roots plus its own `nts` roots), which corresponds to the paper's fallback chain.
+- **`NTPClientController.RootCAs = G`**: *Achim's decision of 2026-11-03*: the group lives in the node, and is not resolved into pins. The server entry gets `"rootGroup": G`, and the node anchors that server at the roots marked `ntsca-<g>` alone. Root pins stay pins and narrow that further, as STS 3.2.4 says. The plan was that the bridge would write the group's fingerprints as `roots[]` and recompute them whenever a root of G came or went. That would have put RootCAs and RootPins into one field, so that a CSMS writing RootPins overwrote the group.
+- **A new or deleted certificate in G** (through OCPP or the web page) counts from the server's next NTS-KE handshake, because the node asks the store at every handshake. Nothing needs recomputing.
+- **`RootCAs` empty** ⇒ no group. The node's rule applies (the machine's roots plus its own `nts` roots), which corresponds to the paper's fallback chain.
 - **GetInstalledCertificateIds**(`NetworkTimeRootCertificate`) lists the roots with usage `nts`, whether they were imported through OCPP or through the web page.
+
+*As built in step 6 (2026-11-03)*:
+- **The node**:
+  - `ServerPins.RootGroup` is read and written with the pins, under `"rootGroup"`, and shown in `heldTo`.
+  - The mark is `<service>ca-<group>` (`ServerPins.MarkOf`). A group has up to 24 letters, digits, '-' or '_', so that the mark of every service, "meterca-" included, fits the 32 characters of a usage.
+  - For a server held to a group, `JudgeServer` takes neither the machine's chain nor a root without a usage nor a pinned root outside the group. A group and pins narrow each other and do not add up. These are the three leaks the SecureDNS session pointed out.
+  - A page save keeps a group the page did not change. What a mismatch comes to goes where no pin is left beside a group, because the file refuses it there.
+  - The page's pin fields gain the group. Its `pins.ts` carries it, so the DNS and meter pages keep it too.
+  - The node honours a group for every service. Only NTS has an OCPP side to set it.
+- **WWCP_OCPP**:
+  - `ICertificateSource` (`WWCP_OCPP_Common`) keeps the roots of some types for both versions, by the names of the types.
+  - `CertificateSources` is a node's set of them, with the certificates in memory for every other type.
+  - A deletion asks every source that has the certificate first (`CheckDeletion`), and deletes it from all of them only where none fails.
+  - Hashes are those of OCSP. The node used to list the issuer's name, its own key in hex and .NET's serial.
+  - The 1.6 charge point, which had no certificate handlers, answers through the same sources.
+  - `NameServerRootCertificate` is added in both versions, for the DNS bridge.
+- **Station**:
+  - `NTSRootCertificates` is the source of `NetworkTimeRootCertificate` for both nodes.
+  - Listed are the roots that vouch for time servers: those for `nts`, and those for every use.
+  - A root for every use is not deleted for the time servers alone (`Failed`, `ForEveryUse`). One kept for another service loses `nts` and its marks, and stays.
+  - Installations and deletions go into the metrological log, with the CSMS that asked.
 
 ### B.12 Node → OCPP: changes from elsewhere
 
@@ -490,7 +511,20 @@ The alternatives that were weighed:
        - no compare-and-set;
        - no check of a variable set twice.
    - Full suites: node 1201/1201, 2.1 1976/1976, station 602/602, each with SourceRules rerun with the artifacts inside the repo.
-6. **Certificates** (B.3 point 7, B.11).
+6. **Certificates** (B.3 point 7, B.11). *Built on 2026-11-03: WWCP_Node 4e86012, on top of e05d41d, WWCP_OCPP 17777861, on top of 92578632, and station a2cf884, on top of 3e1de56 (committed, not pushed yet)*, with the decision and the refinements noted under B.11. Contents:
+   - **WWCP_Node**: `ServerPins.RootGroup` and `MarkOf`, the group in `JudgeServer` and `TryAnchor`, and the group on the page (`pins.ts`, `pinViews.ts`).
+   - **WWCP_OCPP**: `ICertificateSource`, `CertificateSources`, `InMemoryCertificates` and `CertificateHashes` in `WWCP_OCPP_Common`. The certificate handlers of `TestChargingStationNode` (2.1) and `TestChargePointNode` (1.6) go through them. `NameServerRootCertificate` is added, and `NetworkTimeRootCertificate` in `GetCertificateIdUse`.
+   - **Station**: `OCPP/NTSRootCertificates.cs`, registered in `ConfigureNTS` for both nodes. `NTPClientController.RootCAs` is read and written as `rootGroup`.
+
+   Tests:
+   - WWCP_Node: 6 `TimeServerPinningTests` and 7 frontend tests.
+   - WWCP_OCPP: 5 `CertificateSourcesTests` (2.1, over the wire) and 2 `CertificateTests` (1.6). The hashes are checked against BouncyCastle's reading of the certificate. Two older tests now expect OCPP's form of a serial, and `NotFound` where nothing is left.
+   - Station: 7 `NTSRootCertificatesTests` through the station's nodes, and RootCAs moved to the variables the node answers.
+   - 14 mutations, each red in its tests:
+     - in the node: the machine's chain, roots without the mark, pinned roots outside the group, a page's save taking the group, what a mismatch comes to left beside a group alone, and the page's `keysOf` without the group;
+     - in WWCP_OCPP: deleting without asking every source first, a serial with its leading zeros, the same root of two groups listed twice;
+     - in the station: no mark, a shared root deleted outright, roots for every use not listed, the group not written, and the station's check of a group's name.
+   - Full suites: node 1207/1207, frontend 667/667, 2.1 1981/1981, 1.6 639/639, station 609/609, SourceRules with the artifacts inside the repos.
 7. **Monitoring and security events** (B.3 point 6, B.12).
 8. **1.6** (B.3 point 9, B.13).
 9. **Equivalence tests**: The same change through `PUT /nts/groups/{id}` and through SetVariables must yield **the same file** and **the same state** (and the same log, except for `Origin`). Plus round trips from the web page to GetVariables and from SetVariables to `GET /nts/groups/{id}`, and a compare-and-set conflict between the two paths.
