@@ -382,7 +382,7 @@ The station answers InstallCertificate, GetInstalledCertificateIds and DeleteCer
 - **WWCP_OCPP**:
   - `ICertificateSource` (`WWCP_OCPP_Common`) keeps the roots of some types for both versions, by the names of the types.
   - `CertificateSources` is a node's set of them, with the certificates in memory for every other type.
-  - A deletion asks every source that has the certificate first (`CheckDeletion`), and deletes it from all of them only where none fails.
+  - A deletion asks every source that has the certificate first (`CheckDeletionAsync`, asynchronous since WWCP_OCPP 451e785b, because the DNS source's check is a network pre-flight), and deletes it from all of them only where none fails. A root held by the NTS and the DNS source alike is thus deleted for both; a usage no OCPP source manages, such as `meter`, stays.
   - Hashes are those of OCSP. The node used to list the issuer's name, its own key in hex and .NET's serial.
   - The 1.6 charge point, which had no certificate handlers, answers through the same sources.
   - `NameServerRootCertificate` is added in both versions, for the DNS bridge.
