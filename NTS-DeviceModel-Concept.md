@@ -425,6 +425,21 @@ The station answers InstallCertificate, GetInstalledCertificateIds and DeleteCer
 
 The same pattern applies to the keys from STS §3.3, once WWCP_OCPP can register keys with a getter and setter (B.3 point 9). `GetConfiguration` computes the CSL values from the groups. `ChangeConfiguration` becomes a patch for `TryUpdateNTSConfiguration`, and the bridge takes over the paper's CSL rules (a list that is too short ⇒ the last value keeps applying, one that is too long ⇒ an error). Limits: ChangeConfiguration carries one key per request, so bundling is impossible. `ntp.legal.servers` and `ntp.legal.minServers` must therefore come in an admissible order, and `Rejected` carries no reason. In 1.6, pins and new groups stay reserved to the web page. InstallCertificate with `certificateGroup` exists in 1.6 as well (STS extends the 1.6 Security Extensions with it) and goes through the same store.
 
+*As built in step 8 (2026-11-03)*:
+- **One way to change.**
+  - A 1.6 key is turned into the SetVariables entries of the NTP controllers it stands for, and handed to the same Device Model, with ACID where it is several. 1.6 thus has the checks, the refusals and the log line (`ocpp:<id>`) of 2.1.
+  - A change is accepted where every entry is, and rejected otherwise.
+  - The keys are computed when asked: a pair of pin keys per server, and the legal keys for the legal group alone.
+- **Pins.** Unlike the plan above, pins *are* writable through 1.6, because STS §3.3.2 defines `ntske.<g>.certificatePins.n` and `rootPins.n`. Groups are still not made or taken away through 1.6.
+- **Lists.**
+  - A list is per server, in file order, switched-off servers included.
+  - `ntp.<g>.servers` renames servers at their places, keeping their ids and pins.
+  - A new server at the end gets the last server's ports, priority, root group and pin rules, but none of its pins.
+  - Servers beyond the end are taken away.
+- **One interval.** `minInterval` and `maxInterval` each set the node's one interval, because 1.6 cannot set both at once.
+- **Mode.** `mode` takes `NTSv4` alone.
+- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are the delay asymmetries, preflight, `ntske.<g>.servers`, the cookie refresh, `aead`, `signedResponses`, `ntp.reboot.*` and `ntp.timeAdjustmentReportingThreshold`.
+
 ### B.14 Decisions
 
 Settled on 2026-10-29:
@@ -558,7 +573,21 @@ The alternatives that were weighed:
      - in WWCP_OCPP: a delta told at every check, a number told at any move, a threshold never cleared, monitoring a variable that does not support it, no duplicates found, the level ignored, a security event let go before a monitor event, no age, a message taken that nobody took (2.1 and 1.6), and a techInfo not cut;
      - in the station: a change through OCPP told back, a version told that nothing dials, another group's limit told, refused certificates not told, monitors not asked after a change, and a station dialling nothing queueing all the same.
    - Full suites: 2.1 1991/1991, 1.6 641/641, station 615/615. The node is as in step 6.
-8. **1.6** (B.3 point 9, B.13).
+8. **1.6** (B.3 point 9, B.13). *Built on 2026-11-03: WWCP_OCPP bce7a870, on top of 6acdfa63, and station dd5ebd2, on top of 000073a (committed, not pushed yet)*, as noted under B.13. Contents:
+   - **WWCP_OCPP**:
+     - `IConfigurationKeySource` for the 1.6 charge point (`AddConfigurationKeySource`). It computes its keys when asked, resolves a named key live, and answers a change, or says the key is not its own.
+     - Sources are asked before the charge point's own keys.
+     - A write-only key is listed without its value.
+     - ChangeConfiguration is asynchronous.
+   - **Station**: `OCPP/NTSDeviceModel.Keys16.cs`, registered at the charge point in `ConfigureNTS`. The certificates of 1.6 came with step 6, and its security events with step 7.
+
+   Tests:
+   - WWCP_OCPP: 2 `ConfigurationKeySourceTests` over the wire.
+   - Station: 5 `NTSKeys16Tests`.
+   - 13 mutations, each red in its tests:
+     - in WWCP_OCPP: a named key not asked of the sources, the list without them, a write-only value shown, a change not handed on;
+     - in the station: a short list not repeating its last value, a longer one taken, an empty entry not taking the one before it, a new server not taking the last one's settings, servers beyond the end kept, one interval set alone, every mode taken, a pin key too many, the legal keys for every group.
+   - Full suites: 1.6 643/643, station 620/620. 2.1 and the node are as in step 7.
 9. **Equivalence tests**: The same change through `PUT /nts/groups/{id}` and through SetVariables must yield **the same file** and **the same state** (and the same log, except for `Origin`). Plus round trips from the web page to GetVariables and from SetVariables to `GET /nts/groups/{id}`, and a compare-and-set conflict between the two paths.
 10. **Papers**: revise them per A.6, B.5–B.9 and the decisions of B.14 (done on 2026-10-30, see A.6); then apply the pattern to `webPayments` (B.2).
 
