@@ -612,8 +612,13 @@ Fixed in WWCP_OCPP 5afa19e0 (2026-10-29), each with a test, for the battery swap
 
 Still open: SetNetworkProfile is accepted and discarded.
 
-Found in step 4 (2026-11-02), not fixed:
+Found in step 4 (2026-11-02), fixed on 2026-11-03 in WWCP_Core cf75d625 (with WWCP_OCPP 5dad3658, not pushed yet):
 - WWCP_Core's `WWCPWebSocketServer` and `WWCPWebSocketClient` (and the overlay ones) read every message with `JArray.Parse` and Newtonsoft's default `DateParseHandling.DateTime`. A string that looks like a time becomes a time.
 - So a CSMS reads the variable value "2026-11-02T12:00:00.000Z" as "11/02/2026 12:00:00". This happens in GetVariables and NotifyReport, for `ClockCtrlr.DateTime`, `LastCheck`, `LastKeyExchange` and DNS `KnownSince`.
 - Likewise a station receives a SetVariables value that looks like a time in that form. Any other free-text field that holds such a string is mangled the same way.
-- The fix is `DateParseHandling.None` where the messages are parsed. The parsers of dates in the messages would then have to read strings, so that has to be checked across WWCP_OCPP first.
+- The fix is `DateParseHandling.None` where the messages are parsed. `JSONMessages.ParseArray` does that and is otherwise `JArray.Parse`; all four places use it.
+- The parsers of dates in the messages read strings as before. Styx's `ParseMandatory` casts the token to `DateTimeOffset`, which Newtonsoft does from a string with the invariant culture. A time with an offset keeps it now.
+- Tests:
+  - 3 `DateLikeStringsTests` in WWCP_Core, one of them over a WebSocket.
+  - `ClockControllerTests` compares `ClockCtrlr.DateTime` over the wire again. That test is red with the old way of reading.
+  - Full suites: core 90/90, overlay 28/28, 2.1 1991/1991, 1.6 643/643, station 624/624.
