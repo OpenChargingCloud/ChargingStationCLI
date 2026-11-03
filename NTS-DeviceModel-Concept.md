@@ -588,7 +588,17 @@ The alternatives that were weighed:
      - in WWCP_OCPP: a named key not asked of the sources, the list without them, a write-only value shown, a change not handed on;
      - in the station: a short list not repeating its last value, a longer one taken, an empty entry not taking the one before it, a new server not taking the last one's settings, servers beyond the end kept, one interval set alone, every mode taken, a pin key too many, the legal keys for every group.
    - Full suites: 1.6 643/643, station 620/620. 2.1 and the node are as in step 7.
-9. **Equivalence tests**: The same change through `PUT /nts/groups/{id}` and through SetVariables must yield **the same file** and **the same state** (and the same log, except for `Origin`). Plus round trips from the web page to GetVariables and from SetVariables to `GET /nts/groups/{id}`, and a compare-and-set conflict between the two paths.
+9. **Equivalence tests**: The same change through `PUT /nts/groups/{id}` and through SetVariables must yield **the same file** and **the same state** (and the same log, except for `Origin`). Plus round trips from the web page to GetVariables and from SetVariables to `GET /nts/groups/{id}`, and a compare-and-set conflict between the two paths. *Built on 2026-11-03: station 9647436, on top of dd5ebd2 (committed, not pushed yet)*. It holds tests only: 4 `NTSEquivalenceTests`.
+   - The page's PUT goes to a started station that is signed in. SetVariables and the 1.6 keys go to twins built from the same configuration.
+   - For a group's settings, all three leave the same `nts` section in the file and the same group in the node. The page and SetVariables leave the same log line, apart from the origin.
+   - Servers sent whole by the page, with `pinsAsShown`, and the same changes made through SetVariables leave the same servers.
+   - Each path reads at once what the other one wrote.
+   - A CSMS's stale write after a page change is refused as `ValueChanged`.
+   - What is not equal, by design:
+     - A page rename keeps the certificate pins the dialog showed. An OCPP rename drops them unless the same change sets them (B.10).
+     - The page has no compare-and-set for a list: what it sends is what it showed, and the node keeps a pin learned in between (`pinsAsShown`).
+   - 4 mutations, each red in its test: a 1.6 key standing for another variable, a CSMS's change named as the page's, a root group written in another case, no compare-and-set.
+   - Full suite: station 624/624.
 10. **Papers**: revise them per A.6, B.5–B.9 and the decisions of B.14 (done on 2026-10-30, see A.6); then apply the pattern to `webPayments` (B.2).
 
 ### B.16 Side findings (outside NTS, but in the running station program)
