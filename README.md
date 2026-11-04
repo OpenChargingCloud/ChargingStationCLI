@@ -120,9 +120,9 @@ the station runs until it is stopped, exactly as it did before.
 
 The same prompt is served over SSH, on port 22348 — twenty thousand above the
 web interface's — and on the addresses the web interface listens on: the
-loopback, or every address with `--any`. Nothing else is: no shell of the
-machine, no files, no tunnels. `--ssh-port` moves it, `--no-ssh` switches it
-off.
+loopback, or every address with `--any`, and with it the station's files over
+SFTP (below). Nothing else is: no shell of the machine, no tunnels.
+`--ssh-port` moves it, `--no-ssh` switches it off.
 
 Whoever signs in is an account of the charging station, under its name, with a
 key of its own. The first start makes `root`; give it your public key with
@@ -176,6 +176,35 @@ command line over SSH asked this charging station to synchronise its time.",
 tagged `cli` and `ssh`. And the session's log starts at the console's level and
 is its own: `log debug` shows everything here, `log off` nothing, for this
 session alone. `who` says who else is signed in.
+
+
+### Its files over SFTP
+
+The same port serves SFTP, to the same accounts with the same keys: `sftp`,
+`scp` (OpenSSH's speaks SFTP since 9.0), WinSCP or FileZilla.
+
+```
+sftp -P 22348 root@127.0.0.1
+```
+
+An account sees the folders it may read or write, and nothing else of the
+machine - not the configuration file, the accounts, the host key or the
+certificates:
+
+| Folder | Shows | Read by | Written by |
+|---|---|---|---|
+| `/logs` | the day's files of the log | who may read the Logs page | nobody |
+| `/logs/metrological` | the day's files of the metrological log and `signing-key.pub.pem` to check them with | as `/logs` | nobody |
+| `/logos` | `operator.<ext>`, the operator's logo the display shows | `providers:read` | `providers:edit` - the CPO, the installer |
+| `/logos/providers` | `<provider id>.<ext>`, a provider's logo | `providers:read` | `providers:edit` |
+
+What a logo may be, and how the display shows it, is in the charging station's
+own README, under "Operator and providers"; the areas and what is logged of
+them in WWCP_Node's, under "Files over SFTP".
+
+SFTP is served wherever the SSH server is. `"ssh": { "sftp": false }` in the
+configuration file, or the checkbox on the SSH server page, switches it off for
+the next session, and ends the ones open; the command line is still served.
 
 
 ### The log

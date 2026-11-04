@@ -157,7 +157,7 @@ Layout:
 ### 2.6 Configuration
 
 - `ssh.sftp`: `true` or `false` in the configuration file, a checkbox on the SSH server page, `sftp` in the SSH section of the JSON API, guarded by `ssh:edit` like the rest of that section.
-- **Off unless it says `true`** (F1). Switched on or off on the page, it takes effect for the next `subsystem sftp` request without a restart of the SSH server; sessions already open are ended when it is switched off, as by the re-check.
+- **Off unless it says `true`** (F1), for a node whose program says nothing more. A program may serve it unless the file says `false` (`SSHSettings.SftpByDefault`, WWCP_Node `4113a8e`), and since 2026-11-04 the charging station's does, as the energy meter's and the vehicle's do. Nothing is written into the file for that default. Switched on or off on the page, it takes effect for the next `subsystem sftp` request without a restart of the SSH server; sessions already open are ended when it is switched off, as by the re-check.
 - The start's log line about the SSH server says whether SFTP is served; a refused `subsystem sftp` is logged as "SFTP is switched off on this station (ssh.sftp)", not as "only the command line is served".
 - No switch on the command line; the file and the page are enough.
 - SFTP needs the SSH server: with SSH off there is no SFTP, whatever `ssh.sftp` says.
@@ -204,7 +204,7 @@ Decided by Achim on 2026-11-03. F1 and F3 differ from what this concept first re
 
 | # | Question | Decision | Why |
 |---|---|---|---|
-| F1 | Is SFTP on by default where SSH is on, or off until `ssh.sftp` says so? | **Off until `ssh.sftp: true`.** | After an update a station does nothing it did not do before; whoever wants files moved switches it on, in the file or on the SSH server page. |
+| F1 | Is SFTP on by default where SSH is on, or off until `ssh.sftp` says so? | **Off until `ssh.sftp: true`.** *Changed on 2026-11-04:* the charging station serves it unless the file says `"sftp": false`, as the energy meter and the vehicle do; a node whose program says nothing keeps it off. | After an update a station does nothing it did not do before; whoever wants files moved switches it on, in the file or on the SSH server page. The station's logos and log files are what SFTP is there for, so its program now says so itself (2.6). |
 | F2 | What does downloading the logs need: what the Logs page needs (`ToReadTheLog`, today anybody signed in), or a permission of its own (`logs:read`)? | **The same as the Logs page.** | The file holds what the page shows; two answers to "may this account read the log" would drift apart. A kind that wants it narrower says so once, in `ToReadTheLog`. |
 | F3 | What do the logos need: `display:read` / `display:edit`, or a new resource? | **A new station resource, `providers`.** | Dimming the screen and showing other companies' logos on it are different decisions. The resource is also where a later page that edits the providers themselves belongs. |
 | F4 | How is a file bound to a provider: by name (`providers/<id>.<ext>`, the file winning over the configuration's `logo`), or by a reference in the configuration file (`"logo": "ionity.svg"`)? | **By name, the file winning.** | The CPO can put up a logo without touching the file, which only the administrator can; the configuration's `logo` stays as the fallback. |
@@ -231,3 +231,5 @@ Done on 2026-11-03:
 - Step 2: WWCP_Node `507ebf7`, and `08c7b3f` for F9 and the upload tests.
 - Step 4: ChargingStation `b952b24`.
 - Steps 3 and 5: one superproject commit pins all three, since both were ready.
+
+Done on 2026-11-04: the station's program serves SFTP unless the file says `false` (F1 as changed), on WWCP_Node's `SSHSettings.SftpByDefault`.

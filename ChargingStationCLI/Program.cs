@@ -636,7 +636,11 @@ namespace cloud.charging.open.ChargingStation
                               ConsoleLogLevel:   arguments.ConsoleLogLevel,
                               LogPath:           arguments.LogPathBelow(root),
                               BridgeDebugLog:    !arguments.NoTrace,
-                              SSH:               arguments.SSH,
+                              // Its files over SFTP unless the file says
+                              // "sftp": false: the log files, read by who may
+                              // read the Logs page, and the logos the display
+                              // shows, put up by who may edit the providers.
+                              SSH:               arguments.SSH with { SftpByDefault = true },
 
                               // --https, --https-cert, --redirect-port and
                               // --trusted-proxy, over the "web" section of the
