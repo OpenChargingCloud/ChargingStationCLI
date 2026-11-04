@@ -46,7 +46,7 @@ SDNS was written from this implementation, so Part A is shorter than in the NTS 
 | `RecursionDesired` | default `Default` | The client starts with `RecursionDesired = true` (`DNSClient.cs:326`). A station built with nothing therefore reads `Set`; `Default` only after `"recursionDesired": null` was saved. | adjust the paper (A.6) |
 | `UDPPayloadSize`, `ClientSubnet` | ro | fixed at construction (`DNSConfigurationJSON().fixed`), next to `ednsOptions`, `cacheCleanUpEvery`, `negativeCacheTTL` | fits; the other three are not needed |
 | `EncryptedOnly` | rw | **not implemented** | small, in the node (B.4) |
-| `ServerSource` | rw, `System` / `Manual` | The node cannot go back to `System`. It starts with the client's servers (`configuredDNSServers = [.. dnsClient.DNSServers]`, `WWCPNode.cs:778`), refuses an empty list and reads `"servers": null` as "not said". | ro in the bridge; rw needs B.4 point 7 |
+| `ServerSource` | rw, `System` / `Manual` | The node starts with the client's servers (`configuredDNSServers = [.. dnsClient.DNSServers]`, `WWCPNode.cs:778`) and refuses an empty list. It could not go back to `System` and read `"servers": null` as "not said" until B.4 point 7, done on 2026-11-04. | rw since B.4 point 7 |
 | Emptying every slot | refused only while `Enabled = true` | refused **always** | adjust the paper (A.6) |
 | `Enabled = false` | "the CSMS shall switch name resolution off instead" | Switched off, the client holds no servers and answers nothing (`DNSClient.cs:603`). There is no fallback to the resolver of the operating system, and the CSMS connection resolves through this client (A.4 point 8). | the paper contradicts itself (A.6) |
 
@@ -189,6 +189,20 @@ Points 1–9 of NTS concept B.3, built **once** for both bridges. For DNS, in ad
 5. **A dry run of a configuration**: `Task<DNSPreflight> TryResolveWithAsync(JObject Section, IEnumerable<DomainName> Names, TimeSpan Within)`. It makes a separate `DNSClient` with the servers and pins of the section, judges certificates against those pins **without** writing news, learning pins or keeping judgements, and answers which names resolved, and what each server came to. `ResolveAsync` of the diagnostics only asks the configured servers. Needed for B.6. *Done on 2026-10-30* as `WWCPNode.ResolveWithAsync(Section, Names, Within)`, which returns a `DNSPreflight` with an `Error` for a section that would not be saved, and `JudgeServer(…, Remember: false)`, with kit tests.
 6. **`EncryptedOnly`** (small): refuse unencrypted transports while set, and stop asking such servers (SDNS §2.4).
 7. **`ServerSource` writable**: remember the servers the node was constructed with, and read `"servers": null` in a save as "remove the key", as for `recursionDesired`.
+
+   *Done on 2026-11-04.*
+   - **The node:**
+     - It keeps the servers its DNS client held when it was made (`startDNSServers`). For `ChargingStationCLI` those are the operating system's, as `new DNSClient()` looks for them.
+     - `"servers": null` is `DNSConfiguration.RemovesServers`. A save of it takes `servers` out of the file and asks the start servers again, held to nothing: a section without a list has no pins.
+     - The change line says "servers = …, the ones it was started with". The same servers coming from another place are a change as well, in both directions.
+     - The dry run of B.4 point 5 asks the start servers for `"servers": null`.
+     - `GET /api/v1/configuration/dns` says `"serversFrom": "file"` or `"start"`. The README says all of this.
+   - **The bridge:**
+     - `ServerSource` reads `Manual` for the file's servers and `System` for the start ones.
+     - `System` sends `"servers": null`, after the pre-flight, and cannot be one change with a `DNSServerController` entry. After `System`, the slot table is the node's again.
+     - `Manual` writes the servers asked into the file.
+     - OCPP 1.6 has no key for it.
+   - **The page** does not offer it yet: its save always sends the list.
 8. **Close connections when a root goes**: when a TLS root leaves the store or loses the usage `dns`, close the connections of the servers whose last judgement ended at it, as `ApplyDNSConfiguration` does for changed pins. Nothing subscribes to `CertificateStore.OnChanged` (`Certificates/CertificateStore.cs:219`) for this today.
 
    *Done on 2026-11-03* (`NameServerRootsChanged` in `WWCPNode.NameServerCertificates.cs`): at every change of the store, a server whose last accepted judgement was anchored at a root of the store that no longer anchors it loses its connection and its judgement, with a line tagged `dns`, `certificates`, `security`. That covers a root deleted, switched off, no longer for `dns`, or no longer marked for the server's group. `TryAnchor` and this check take the anchors from the same `AnchorsFor`. A server believed through a root the machine trusts keeps its connection. NTS-KE is not touched.
@@ -237,7 +251,7 @@ A timer that rolls back after the change does not help here: the open WebSocket 
 | `MaxServers` | integer | ro | `limits.maxServers` | 16 |
 | `UDPPayloadSize` | integer | ro | `fixed.udpPayloadSize` | |
 | `ClientSubnet` | string | ro | `fixed.clientSubnet` | `null` ⇒ `""` |
-| `ServerSource` | OptionList `System,Manual` | ro, rw after B.4 point 7 | the file has `servers` | read from the file, not from the client |
+| `ServerSource` | OptionList `System,Manual` | rw (B.4 point 7) | `serversFrom`: `file` ⇒ `Manual`, `start` ⇒ `System` | `System` writes `"servers": null`, `Manual` the servers asked |
 | `EncryptedOnly` | boolean | n/a until B.4 point 6 | `encryptedOnly` | not in the report until then ⇒ `UnknownVariable` |
 
 ### B.8 Variables: `DNSServerController[<slot>]`
@@ -366,11 +380,11 @@ Limits: one key per request, so there is no exception for new servers. With the 
 
 ### B.13 Decisions
 
-Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS concept B.14), and point 5 with the NTS paper on 2026-10-30. The others are open; the numbers stay, because the rest of this document refers to them.
+Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS concept B.14), point 5 with the NTS paper on 2026-10-30, and point 3 by Achim on 2026-11-04. The others are open; the numbers stay, because the rest of this document refers to them.
 
 1. **Location of the bridge**: in ChargingStation first, then together with the NTS bridge into an adapter assembly (NTS concept B.1). Decide for both together.
 2. **Names** (settled): `DNSClientController` and `DNSServerController`, so that both extensions are named alike, as NTS concept B.14 point 2 asks: `NTPController`, `NTPClientGroupController` and `NTPClientController` there. The paper uses these names since 2026-10-29. WWCP_OCPP's placeholders `DNSCtrlr` and `DNSServerCtrlr` are replaced (B.3 point 1). The alternative was the OCPP-customary `…Ctrlr` of the standard components, which this concept had recommended.
-3. **Slots or ids**: slots `1…16` are chosen because a standard CSMS can then add a server. NTS has since chosen the `id` field (NTS concept B.4 point 3, B.14 point 4) and ruled out positions for its servers, because they shift when a server is removed. The node gets the mechanism anyway, so `dns.servers[]` could carry slot numbers as ids; compacting would go away, and slots would stay stable across requests.
+3. **Slots or ids** (settled on 2026-11-04: **ids**, as for NTS). Not built yet: the slots of B.5, B.8 and B.9 are what the bridge does until then. Before: slots `1…16` are chosen because a standard CSMS can then add a server. NTS has since chosen the `id` field (NTS concept B.4 point 3, B.14 point 4) and ruled out positions for its servers, because they shift when a server is removed. The node gets the mechanism anyway, so `dns.servers[]` could carry slot numbers as ids; compacting would go away, and slots would stay stable across requests.
 4. **Transports over OCPP**: `UDP, TCP, TLS, HTTPS, HTTPS_GET`, as recommended here and now written into the paper (`bdfe66a`); to be confirmed. `HTTPS_JSON` only for diagnostics, `HTTPS_Binary` is the same as `HTTPS`, `HTTP*` only for tests. A server configured locally with another transport still reads back as it is.
 5. **Data type of pin lists** (settled): `string`, in both papers. NTS concept B.9 had `SequenceList`, which takes only values of the `valuesList`. Since 2026-10-30 the NTS paper and concept have comma separated strings for every list (NTS concept A.6, Whitepapers `4e5e43d`), as SDNS always had (A.6 point 10).
 6. **Scope of the pre-flight** (B.6): the CSMS hosts only, or the NTS-KE hosts of the legal group as well, and whether those block or only warn.
@@ -407,7 +421,7 @@ The shared steps are those of NTS concept B.15 and are built **once**. DNS is th
    - The node has the dry run.
    - The station's `DNSDeviceModel` writes through `TryUpdateDNSConfiguration`.
 
-   B.4 points 1 to 4 followed on 2026-11-02 (step 2). Still open are B.4 points 6 and 7.
+   B.4 points 1 to 4 followed on 2026-11-02 (step 2), and point 7 on 2026-11-04. Still open is B.4 point 6.
 6. **Certificates** (B.10), through the shared store interface, with B.4 point 8. *Done on 2026-11-03*, with `RootCAs`.
 
    Tests:
@@ -518,3 +532,4 @@ The shared steps are those of NTS concept B.15 and are built **once**. DNS is th
 - WWCP_OCPP's OCPP 2.1 classes carry the schema limits of OCPP 2.0.1 in their comments: `attributeValue` 1000 (`SetVariableData.cs:143`), `additionalInfo` 512 (`StatusInfo.cs:51`). The OCPP 2.1 Edition 1 schema says 2500 and 1024.
 - The doc comment of `PostDNSQuery` (`NodeHTTPAPI.NamesAndTime.cs`) says a query without `server` goes "to the servers in turn, until one answers"; the client asks all of them at once (`DNSClient.cs:840`). *Fixed on 2026-11-04* in the same commit: the comment says all at once, and the first usable answer counts.
 - WWCP_OCPP's commit `06d64b5f` also added `NTSCtrlr` and `NTSServerCtrlr` in `WWCP_OCPPv2.1_ChargingStation/Components/Logical/NTS/`. Only `NTSCtrlr` is an `AuthCtrlr` copy like the two DNS placeholders; `NTSServerCtrlr` is a sketch with about 40 NTP and NTS-KE properties. NTS concept B.2 lists only `NTPClientController` and `NTPClientGroupController` in `WWCP_OCPPv2.1/Components/Logical/`. WWCP_OCPP `1bf9af1f` removed `NTSCtrlr` and kept `NTSServerCtrlr` (NTS concept B.3 point 10).
+- On Linux, two roots of the store that signed themselves under the same name, without key identifiers, are one issuer to the chain: it takes the first root of that name, its signature does not fit, and the server whose root is the second one stays untrusted. Windows tells them apart. T20 in `DNSEquivalenceTests` was red in the Debian job for that alone, with two name servers' certificates both called `CN=localhost`; each has a name of its own since 2026-11-04. A real root CA carries a subject key identifier, by which a renewed one under the same name with a new key should be told apart; that was not tried. Two roots of one name without one would meet the same fate in the field.
