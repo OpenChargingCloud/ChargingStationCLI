@@ -97,7 +97,7 @@ SDNS was written from this implementation, so Part A is shorter than in the NTS 
 
 ### A.6 Where the paper must be revised
 
-All points except 10 and 11, which concern the NTS concept and the names in WWCP_OCPP, were worked into the paper on 2026-10-29 (Whitepapers `bdfe66a`, pushed to origin, github and git2), together with point 15. Point 11 followed the same day (Whitepapers `0c0a01e`), once the names were settled together with NTS (B.13 point 2); point 10 is left. For point 8, SDNS §3.1.3 now requires the pre-flight of B.6 with `reasonCode` `CSMSUnreachable`, for *DeleteCertificate* as well (T19–T21). For point 12, the `valuesList` of `Transport` is now `UDP, TCP, TLS, HTTPS, HTTPS_GET`.
+All points except 10 and 11, which concern the NTS concept and the names in WWCP_OCPP, were worked into the paper on 2026-10-29 (Whitepapers `bdfe66a`, pushed to origin, github and git2), together with point 15. Point 11 followed the same day (Whitepapers `0c0a01e`), once the names were settled together with NTS (B.13 point 2). Point 10 is settled since 2026-10-30, when the NTS paper and concept made their lists `string` as well (NTS concept A.6, Whitepapers `4e5e43d`; B.13 point 5). For point 8, SDNS §3.1.3 now requires the pre-flight of B.6 with `reasonCode` `CSMSUnreachable`, for *DeleteCertificate* as well (T19–T21). For point 12, the `valuesList` of `Transport` is now `UDP, TCP, TLS, HTTPS, HTTPS_GET`.
 
 **Technical errors (first)**
 
@@ -366,13 +366,13 @@ Limits: one key per request, so there is no exception for new servers. With the 
 
 ### B.13 Decisions
 
-Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS concept B.14). The others are open; the numbers stay, because the rest of this document refers to them.
+Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS concept B.14), and point 5 with the NTS paper on 2026-10-30. The others are open; the numbers stay, because the rest of this document refers to them.
 
 1. **Location of the bridge**: in ChargingStation first, then together with the NTS bridge into an adapter assembly (NTS concept B.1). Decide for both together.
 2. **Names** (settled): `DNSClientController` and `DNSServerController`, so that both extensions are named alike, as NTS concept B.14 point 2 asks: `NTPController`, `NTPClientGroupController` and `NTPClientController` there. The paper uses these names since 2026-10-29. WWCP_OCPP's placeholders `DNSCtrlr` and `DNSServerCtrlr` are replaced (B.3 point 1). The alternative was the OCPP-customary `…Ctrlr` of the standard components, which this concept had recommended.
 3. **Slots or ids**: slots `1…16` are chosen because a standard CSMS can then add a server. NTS has since chosen the `id` field (NTS concept B.4 point 3, B.14 point 4) and ruled out positions for its servers, because they shift when a server is removed. The node gets the mechanism anyway, so `dns.servers[]` could carry slot numbers as ids; compacting would go away, and slots would stay stable across requests.
 4. **Transports over OCPP**: `UDP, TCP, TLS, HTTPS, HTTPS_GET`, as recommended here and now written into the paper (`bdfe66a`); to be confirmed. `HTTPS_JSON` only for diagnostics, `HTTPS_Binary` is the same as `HTTPS`, `HTTP*` only for tests. A server configured locally with another transport still reads back as it is.
-5. **Data type of pin lists**: `string` (SDNS) or `SequenceList` (NTS concept B.9). Recommendation: `string` with a max limit of 2500 for both (A.6 point 10).
+5. **Data type of pin lists** (settled): `string`, in both papers. NTS concept B.9 had `SequenceList`, which takes only values of the `valuesList`. Since 2026-10-30 the NTS paper and concept have comma separated strings for every list (NTS concept A.6, Whitepapers `4e5e43d`), as SDNS always had (A.6 point 10).
 6. **Scope of the pre-flight** (B.6): the CSMS hosts only, or the NTS-KE hosts of the legal group as well, and whether those block or only warn.
 7. **May the CSMS change the name servers at all?** (settled) Yes, always, with no switch to lock them, as NTS concept B.14 point 1 decides for the legal group. What protects the station is the pre-flight (B.6) and the record: every change goes to the security log with its `Origin` (B.4 point 2), and changes from the web page or the CLI reach the CSMS as `ReconfigurationOfSecurityParameters` (B.11 point 5). SDNS §3.1.3 says so since 2026-10-29. The alternative was a switch `dns.ocpp: "readOnly"` for operators who set the resolvers locally.
 8. **Revocation for chains to the roots of the operating system** (A.6 point 1): check them (online, unknown status ignored) or document that they are not checked.
@@ -448,12 +448,73 @@ The shared steps are those of NTS concept B.15 and are built **once**. DNS is th
    - the first server's pins for every n;
    - an empty entry not the one before;
    - no keys on the charge point.
-9. **Equivalence tests**: the same change through `PUT /api/v1/configuration/dns` and through *SetVariables* yields the same file, the same state, and the same log except for `Origin`. Also SDNS T1–T18; emptying a slot and changing one behind it in the same request; the port rule; `pinsAsShown` against trust on first use between reading and writing; a compare-and-set conflict between the two paths; the pre-flight refusing name servers that cannot resolve the CSMS and `Enabled = false`; `NotSaved` (a read-only file) ⇒ `InternalError` with nothing in effect; after `BuildOCPPNodes` (an EVSE change) the components are still there.
-10. **Paper**: revised per A.6 in `bdfe66a`, and with the decisions of B.13 points 2 and 7 on 2026-10-29; point 10 remains, with the NTS concept.
+9. **Equivalence tests**: the same change through `PUT /api/v1/configuration/dns` and through *SetVariables* yields the same file, the same state, and the same log except for `Origin`. Also SDNS T1–T18; emptying a slot and changing one behind it in the same request; the port rule; `pinsAsShown` against trust on first use between reading and writing; a compare-and-set conflict between the two paths; the pre-flight refusing name servers that cannot resolve the CSMS and `Enabled = false`; `NotSaved` (a read-only file) ⇒ `InternalError` with nothing in effect; after `BuildOCPPNodes` (an EVSE change) the components are still there. *Done on 2026-11-04* (station `035b358`, with the B.15 fixes in WWCP_Node `8bb5d49`).
+
+   Tests:
+   - 8 `DNSEquivalenceTests` in the station. The page goes through a started station that is signed in to; *SetVariables* and the 1.6 keys go through twins built from its configuration. The cases:
+     - the client's settings changed on the page, through *SetVariables* and through the 1.6 keys;
+     - the first server taken away and the two behind it changed, on the page and through *SetVariables* in one request, with the port of TLS left to the transport;
+     - what one way changed, the others read;
+     - a page change between a CSMS's read and its write is refused as `ValueChanged`;
+     - a pin the CSMS set while the page was open is kept by the page's save;
+     - a pin learned between a CSMS's read and its write is kept by its change, and refused as `ValueChanged` where the CSMS names the empty list it read;
+     - T20 against two name servers of Hermod's own on the loopback over TLS, refused through *SetVariables* and through `dns.ports`, and accepted once the CSMS has installed the second server's root;
+     - T17, with a directory where the file is written first: the page gets 500, OCPP 2.1 `InternalError` and OCPP 1.6 `Rejected`, and nothing is in effect.
+   - 16 `DNSTestCriteriaTests` cases for the criteria that no other test tried as the paper states them (table below).
+   - `ATransportIsTakenByItsNameAlone` (4 cases) in the node, for B.15.
+   - The components after `BuildOCPPNodes` were already tried by `DNSDeviceModelTests.TheOCPPNodeReadsTheStationsNameResolution`.
+
+   **What the files say.** The page sends every setting of its form and every server with its port, and the node writes what it is sent. OCPP writes only what it changes. So the same change leaves files that differ as text: `"port": 853` or `"useCache": true` is written out after the page's save, and left to its default after the CSMS's. Both files say the same, and a station started from either holds the same. The tests compare the files that way, and the node's state without its `file`.
+
+   **T1 against the paper.** The paper expects "the causing entry `Rejected`". A server moved to UDP and given a root in one request is refused by the node as a server, and the bridge rejects every entry of that server, as neither alone would be refused. Entries of other components are `Rolledback`. The paper should say "the entries of that server" (to be confirmed).
+
+   | T | Tests |
+   |---|---|
+   | T1 | `DNSTestCriteriaTests.APinForATransportThatCannotCarryItIsRefusedAsAWhole`; `DNSDeviceModelWritingTests.ARefusalOfTheNodeRollsTheRestBack` |
+   | T2 | `DNSTestCriteriaTests.APinBeforeItsTransportIsRefusedOnlyEntryByEntry` (4 cases) |
+   | T2a | `DNSTestCriteriaTests.ANewServerIsNeverAskedInClearText`; `DNSDeviceModelWritingTests.ANewServerComesWithItsAddress` |
+   | T3 | `DNSTestCriteriaTests.ACertificateForAnotherAddressIsRefusedWhateverItIsHeldTo`; the node's `TimeServerPinningTests.ACertificateForAnotherNameIsRefusedWhateverItIsHeldTo`, through the same `JudgeServer` |
+   | T4, T5 | `DNSTestCriteriaTests.OnlyARootForNameServersVouchesForANameServer`, installed by the CSMS as `CSMSRootCertificate`, `NetworkTimeRootCertificate` and `NameServerRootCertificate`; the node's `NameServerPinningTests.ARootForTheTimeServersAloneVouchesForNoNameServer` and `ANameServerOverTLSIsBelievedThroughARootOfTheNodesOwnForDNS` |
+   | T6 | `DNSTestCriteriaTests.AFingerprintThatDoesNotMatchIsLoggedAsItsServerSays` (3 cases); `DNSEventsTests.AFingerprintThatDoesNotMatchIsTold` (3 cases) |
+   | T7 | `DNSEventsTests.APinLearnedOnFirstUseIsToldOnce`; `DNSTestCriteriaTests.ARootLearnedOnFirstUseIsHeldAfterARestart`; the node's `NameServerPinningTests.ANameServerLearnsItsCertificateOnFirstUse` |
+   | T8 | `DNSTestCriteriaTests.AServerHeldToARootAlreadyLearnsNone` |
+   | T9 | `DNSEventsTests.AnotherCertificateThanBeforeIsTold`; the node's `NameServerPinningTests.AnotherCertificateThanBeforeIsNews` |
+   | T10 | `DNSEventsTests.ARefusedNameServerCertificateIsToldOnce`; the node's `NameServerPinningTests.WhatIsNewsIsToldOnceAndBelievingAgainToo` |
+   | T11 | the node's `NameServerPinningTests.AChangeToWhatANameServerIsHeldToIsSaidAndCountsAtOnce` |
+   | T12 | open: `EncryptedOnly` is B.4 point 6 |
+   | T13 | the node's `NameServersAskedTests.ANameServerOnItsOwnIsAskedOverWhatItIsConfiguredFor` (over TCP, never over UDP); Hermod's client asks a server over its own transport only (`DNSClient.GetOrCreateTransportClient`) |
+   | T14 | `DNSDeviceModelWritingTests.EveryAddressEmptiedIsRefused`; `DNSTestCriteriaTests.EveryAddressEmptiedIsRefusedSwitchedOffToo` |
+   | T15 | WWCP_OCPP's `DNSControllerTests.TryCheck_SaysWhatThePaperAllows` (17 pins, timeouts and ports, `ValueOutOfRange`); a server beyond `MaxServers` has no slot to be set in |
+   | T16 | `DNSEventsTests.AChangeOnThePageIsToldToEachVersionThatIsDialled`; `DNSEquivalenceTests`, where the log line names `web:root` |
+   | T17 | `DNSEquivalenceTests.WhatTheFileCannotTakeIsChangedNowhere`; `DNSDeviceModelWritingTests.WhatCannotBeSavedIsAnInternalError` |
+   | T18 | WWCP_OCPP's `DNSControllerTests.GetBaseReport_ListsEverySlotWithItsCharacteristics_Test`; `DNSDeviceModelTests.TheOCPPNodeReadsTheStationsNameResolution` |
+   | T19 | `DNSDeviceModelWritingTests.SwitchedOffWhileTheCSMSIsDialledByNameIsRefused`; `DNSKeys16Tests.SwitchedOffWhileTheCentralSystemIsDialledByNameIsRejected` |
+   | T20 | `DNSEquivalenceTests.ANameServerTheCSMSWouldNotResolveThroughIsRefusedByEitherVersion`; `DNSDeviceModelWritingTests.AChangeThatCutsTheCSMSOffIsRefused` |
+   | T21 | `DNSRootCertificatesTests.ARootTheNamesOfTheCSMSResolveThroughIsKept` |
+
+   17 mutations, each red in exactly its tests:
+   - the port rule gone;
+   - a learned pin forgotten by the bridge, with nothing said of what it showed;
+   - a pin the page never showed taken away by its save (in the node);
+   - compare and set gone;
+   - the pre-flight asking the configuration as it is;
+   - the node putting a change into effect before it is saved;
+   - the page told 400 for a file that cannot be written;
+   - `UseCache` written as `DNSSECOK`;
+   - only the first entry of a refused server rejected;
+   - independent requests made as one;
+   - the entries of an unused slot not gathered by its address;
+   - a certificate for another name forgiven where a pin matches;
+   - a root of the time servers vouching for name servers as well;
+   - a pin learned while one of its kind is held, past both guards;
+   - a learned pin not written into the file;
+   - a recorded mismatch kept out of the metrological log;
+   - a transport taken by its number (in the node).
+10. **Paper**: revised per A.6 in `bdfe66a`, and with the decisions of B.13 points 2 and 7 on 2026-10-29. Point 10 was settled by the NTS paper on 2026-10-30 (B.13 point 5).
 
 ### B.15 Side findings
 
-- `DNSConfiguration.TryParseServer` reads the transport with `Enum.TryParse(…, ignoreCase: true, …)` (`DNSConfiguration.cs:253`), which also takes numbers. `"transport": "3"` is `HTTP`. `"99"` is an undefined transport: port 53, asked over UDP (the default arms in `DNSServerConfig.DefaultPortFor` and `DNSClient.GetOrCreateTransportClient`), and named `99://…` in the log. The same pitfall as for other enums read this way; `Enum.IsDefined` plus a refusal of digits would close it.
+- `DNSConfiguration.TryParseServer` reads the transport with `Enum.TryParse(…, ignoreCase: true, …)` (`DNSConfiguration.cs:253`), which also takes numbers. `"transport": "3"` is `HTTP`. `"99"` is an undefined transport: port 53, asked over UDP (the default arms in `DNSServerConfig.DefaultPortFor` and `DNSClient.GetOrCreateTransportClient`), and named `99://…` in the log. The same pitfall as for other enums read this way; `Enum.IsDefined` plus a refusal of digits would close it. *Fixed on 2026-11-04* (WWCP_Node `8bb5d49`): a transport is taken by its name alone, in any case, and anything else is refused with the known transports (`DNSConfigurationTests.ATransportIsTakenByItsNameAlone`). Lists of names such as `"TLS, UDP"` were taken as well, ORed together.
 - WWCP_OCPP's OCPP 2.1 classes carry the schema limits of OCPP 2.0.1 in their comments: `attributeValue` 1000 (`SetVariableData.cs:143`), `additionalInfo` 512 (`StatusInfo.cs:51`). The OCPP 2.1 Edition 1 schema says 2500 and 1024.
-- The doc comment of `PostDNSQuery` (`NodeHTTPAPI.NamesAndTime.cs`) says a query without `server` goes "to the servers in turn, until one answers"; the client asks all of them at once (`DNSClient.cs:840`).
+- The doc comment of `PostDNSQuery` (`NodeHTTPAPI.NamesAndTime.cs`) says a query without `server` goes "to the servers in turn, until one answers"; the client asks all of them at once (`DNSClient.cs:840`). *Fixed on 2026-11-04* in the same commit: the comment says all at once, and the first usable answer counts.
 - WWCP_OCPP's commit `06d64b5f` also added `NTSCtrlr` and `NTSServerCtrlr` in `WWCP_OCPPv2.1_ChargingStation/Components/Logical/NTS/`. Only `NTSCtrlr` is an `AuthCtrlr` copy like the two DNS placeholders; `NTSServerCtrlr` is a sketch with about 40 NTP and NTS-KE properties. NTS concept B.2 lists only `NTPClientController` and `NTPClientGroupController` in `WWCP_OCPPv2.1/Components/Logical/`. WWCP_OCPP `1bf9af1f` removed `NTSCtrlr` and kept `NTSServerCtrlr` (NTS concept B.3 point 10).
