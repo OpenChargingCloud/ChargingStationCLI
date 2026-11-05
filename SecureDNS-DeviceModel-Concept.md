@@ -452,7 +452,9 @@ Settled with point 3 on 2026-11-05: under `IndependentRequests`, a new server is
    - **Own roots:** `TryAnchor` asks with the same time limit (it had none) and reports a revoked certificate the same way, instead of "chains to no root".
    - **NTS:** NTS-KE servers and the station's meters go through `JudgeServer` as well. For their own roots, the time limit and the revoked step reach them too.
 
-     Norn's NTS-KE client builds the machine's chain online itself (`NTSKE_TLSClient.NotifyServerCertificate`: `Online`, `EntireChain`, `NoFlag`, no time limit). For roots of the operating system it is therefore hard-fail today: a list out of reach is a chain error, then `TryAnchor`, then `untrusted`. The node does not ask such a chain again. Whether NTS becomes soft-fail there too is Achim's call, and not built.
+     Norn's NTS-KE client builds the machine's chain online itself (`NTSKE_TLSClient.NotifyServerCertificate`: `Online`, `EntireChain`, `NoFlag`, no time limit). For roots of the operating system it is therefore hard-fail today: a list out of reach is a chain error, then `TryAnchor`, then `untrusted`. The node does not ask such a chain again.
+
+     Achim decided on 2026-11-06 that NTS becomes soft-fail there too, like DNS ("dann 2."). The other options were hard-fail with a 3 s time limit in Norn, and a switch per group. Norn is to stop checking, so that the node asks, with `RevocationWait` and the step naming what is revoked. This is the NTS session's to build, in Norn; it is not built yet.
    - **Tests:** 11 `ServerRevocationTests` in the node. They serve the lists over HTTP on the loopback, signed by the test's own CAs:
      - revoked, and on no list;
      - a revoked CA in the chain;
