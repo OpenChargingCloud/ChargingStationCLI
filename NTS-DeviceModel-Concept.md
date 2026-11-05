@@ -63,7 +63,7 @@ Part A compares, Part B describes the missing glue code.
 | `RootCAs` | the name of a root CA group | **no groups per server.** Instead there are node-wide TLS roots with usage `nts` and **pins per server**: `certificates[]` and `roots[]` as SHA-256 fingerprints (≤ 16 each), plus `onMismatch` (refuse/record/accept) and `trustOnFirstUse`. As decided on 2026-10-20, the pins cover root CAs per group. |
 | `NoCertTimeCheckAfterReboot` | Boolean | **not implemented** |
 | `MinRefresh`/`MaxRefresh` | seconds in v2.x, **days** in v1.6 (30/60) | a fixed **30 minutes** (`Norn MonitoringConfig.NTSKERefreshInterval`), plus a cookie pool that is renewed when exhausted |
-| `AEADAlgorithm` | selectable | Norn offers both (`OfferedAEADAlgorithms`), but the node does **not make it configurable**; only the negotiated algorithm can be read |
+| `AEADAlgorithm` | selectable | Norn offers both (`OfferedAEADAlgorithms`), but the node does **not make it configurable**; only the negotiated algorithm can be read. *Configurable per server since B.4 point 5 (2026-11-05)*: `aead`, and unset offers both |
 | `SignedResponses` | Boolean | Norn has the extensions (0xff00–0xff02) and `QueryTime(RequestSignedResponse…)`, but the **node never requests them** |
 | (none) | missing | `enabled` per server |
 | (none) | missing | pins, `onMismatch`, `trustOnFirstUse` (see above) |
@@ -222,6 +222,26 @@ Because only the first subscriber is dispatched, these hooks must sit **inside**
    - `TryUpdateNTSConfigurations` reports in `out NTSGroup? Refused` which group caused a refusal (null where only the section as a whole is refused, e.g. an id in two groups), so the bridge can mark that group's entries `Rejected` and the others `Rolledback`. A group named twice is refused.
    - Still open, as in SecureDNS B.4 point 4: reading the servers and writing them whole are two steps, and a server added on the page in between is lost. The bridge can catch that only once the read and the write share the lock. *Closed in step 5*: `TryUpdateNTSConfigurations(Func<IReadOnlyList<NTSGroup>, …>)` asks the change for its parts under `reconfigureLock`, as `TryUpdateDNSConfiguration(Func<JObject, JObject?>)` does for DNS. The bridge compares each group's servers there with the ones the request read, and refuses the change as `ValueChanged` where they differ.
 5. **Pass AEAD through** (small): Norn has `NTSServerEndpoint.OfferedAEADAlgorithms`; the node needs the field `aead` per server and has to pass it on in `ToEndpoint()`.
+
+   *Built on 2026-11-05*, with Achim's decisions of the same day:
+   - **Unset offers both, as before.** A server without `aead` offers Norn's list, AES-128-GCM-SIV first and then AES-SIV-CMAC-256, and the server chooses. A set `aead` offers that one algorithm alone. This deviates from the paper's default of AES-SIV-CMAC-256 on purpose, so that nothing changes for existing servers.
+   - **What OCPP reads.** `AEADAlgorithm` reads the algorithm the entry sets. Unset, it reads the one the last key exchange agreed on, or "" before the first. Writing "" goes back to unset, so WWCP_OCPP marks the variable `MayBeEmpty`.
+   - **The 1.6 key is built too.** `ntske.<g>.aead` is one value per server, comma separated (B.13).
+
+   Found on the way: Norn's `MeasurementEngine.MeasureNTSKE` never passed `NTSServerEndpoint.OfferedAEADAlgorithms` to its client. The key exchange of every round therefore offered the client's whole list, whatever the endpoint said. It passes the list on now. A cached key exchange whose agreed algorithm the endpoint no longer offers is not reused (2 tests in `MeasurementEngine_Tests`).
+
+   How it works:
+   - **The node.** `aead` takes "AES-SIV-CMAC-256" or "AES-128-GCM-SIV", in any case, and is written back in capitals. Other values are refused: AES-256-GCM-SIV, which Norn can perform but has never run against another implementation, AES_SIV_CMAC_256 in Norn's own spelling, and anything that is not a string.
+   - **By host name across all groups**, as with the pins. A server is one server with one key exchange in Norn's cache. The first entry that names an algorithm decides, so a group that lists the same server without one does not undo it (`WWCPNode.TimeServerAEAD.cs`).
+   - **On every change.** `OfferAEAD()` puts the offer on every group's endpoints and rebuilds a group's detailed-test client whose offer is wrong. A changed offer lets go of the server's key exchange and is a change line of its own: "a.example offered AES-SIV-CMAC-256 alone", or "… offered AES-128-GCM-SIV and AES-SIV-CMAC-256". A removed group's offers are recomputed as well, and the removal's log line names any that changed. The detailed test offers what its server is offered.
+   - **The API and the page.** Each entry of `timeSources[]` shows its own entry's `aead`, which the page sends back, beside the agreed `aeadAlgorithm`. It is not the effective offer from another group, which a save of this group would otherwise write into it. `limits.aeadAlgorithms` lists the two. The server dialog has a select: every one (the server choosing), or one alone. `entryOf` keeps a server's `aead`, so a save of another server does not take it away.
+   - **The bridge.** The bridge's `Server`, which writes a group's entries anew on every OCPP change, carries `aead` through, so a change of a server's priority keeps it. A server added by `ntp.<g>.servers` takes the last server's set `aead`, not the algorithm it agreed on.
+
+   Tests:
+   - Node: 11 `NTSServerAEADTests` and the kit test `AServerIsOfferedTheAEADAlgorithmItsEntryNames`.
+   - Frontend: 4 tests.
+   - WWCP_OCPP: `TryCheck_TheAEADAlgorithmIsOneOfTheTwoOrNone_Test`.
+   - Station: `AServerIsOfferedOneAEADAlgorithmOrEveryOne` (SetVariables), `TheAEADAlgorithmIsAListWhoseEmptyEntryOffersEveryOne` and `ANewServerOffersWhatTheLastOnesEntryNames` (1.6), and the AEAD algorithm in `TheSameServersLeaveTheSameFileWhicheverWayTheyCame`.
 6. **A reporting threshold for offsets** (legal only): `offsetReportingThresholdSeconds`, the target of `ClockCtrlr.TimeAdjustmentReportingThreshold` (B.6).
 
    *Built on 2026-11-03*, with Achim's decisions of the same day: reported when the threshold is reached, five seconds where nothing says otherwise, and switched off by an empty value.
@@ -323,7 +343,7 @@ The "legal only" variables exist **only** in the instance `legal`. In any other 
 | `RootPins` *(new)* | string, comma separated SHA-256 | rw | `roots[]` | ≤ 16 |
 | `OnPinMismatch` *(new)* | OptionList `Refuse,Record,Accept` | rw | `onMismatch` | |
 | `TrustOnFirstUse` *(new)* | OptionList `None,Root,Certificate` | rw | `trustOnFirstUse` | |
-| `AEADAlgorithm` | OptionList `AES-SIV-CMAC-256,AES-128-GCM-SIV` | ro, rw after B.4 point 5 | `aead` / negotiated | |
+| `AEADAlgorithm` | OptionList `AES-SIV-CMAC-256,AES-128-GCM-SIV` | rw (since B.4 point 5) | `aead` / negotiated | "" offers both, the server choosing, and reads the negotiated one |
 | `Cookies`, `LastKeyExchange`, `Certificate`, `Judgement` | various | ro | state per host name | like `timeSources[]` in the API |
 | `MinRefresh`/`MaxRefresh` | integer s | ro (1800) | Norn `NTSKERefreshInterval` | rw only once the node makes it configurable; the paper's defaults are now 43200/86400 |
 | `DelayAsymmetry`, `DelayVarAsymmetry`, `NoCertTimeCheckAfterReboot`, `SignedResponses` | n/a | n/a | not implemented | not in the report ⇒ `UnknownVariable`; report them only once the node supports them. `Preflight` and `ErrorLogging` are variables of the group now (B.8). |
@@ -445,7 +465,8 @@ The same pattern applies to the keys from STS §3.3, once WWCP_OCPP can register
   - Servers beyond the end are taken away.
 - **One interval.** `minInterval` and `maxInterval` each set the node's one interval, because 1.6 cannot set both at once.
 - **Mode.** `mode` takes `NTSv4` alone.
-- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are the delay asymmetries, preflight, `ntske.<g>.servers`, the cookie refresh, `aead`, `signedResponses` and `ntp.reboot.*`.
+- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are the delay asymmetries, preflight, `ntske.<g>.servers`, the cookie refresh, `signedResponses` and `ntp.reboot.*`.
+- **AEAD.** `ntske.<g>.aead` came with B.4 point 5 (2026-11-05). It is a list like the others except for an empty entry, which is a server that offers every algorithm, not the one before it. A server whose entry names none reads as `AEADAlgorithm` does: the algorithm agreed on, or "".
 - **The threshold.** `ntp.timeAdjustmentReportingThreshold` came with B.4 point 6 (2026-11-03). It is `ClockCtrlr.TimeAdjustmentReportingThreshold` and so the legal group's, listed where there is a legal group. It reads "5" by default and "" for never, and an empty value switches the report off.
 
 ### B.14 Decisions
@@ -501,7 +522,7 @@ The alternatives that were weighed:
    - **How some values read**:
      - `ServerURL` reads without the final dot the node writes.
      - The pins and `OnPinMismatch`/`TrustOnFirstUse` are what the node holds the host name to (the page's `heldTo`). A host named in two groups shows the entry that says something about it first.
-     - `AEADAlgorithm` is the one the last key exchange agreed on, "" before the first.
+     - `AEADAlgorithm` is the one the last key exchange agreed on, "" before the first. Since B.4 point 5 it is the one the server's entry names, where it names one.
      - `Problem` is a refused certificate at the last key exchange.
      - `LegalTimeReason` maps the node's `ntsOff` to `Disabled`.
 
