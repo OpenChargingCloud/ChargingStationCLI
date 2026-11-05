@@ -67,7 +67,7 @@ SDNS was written from this implementation, so Part A is shorter than in the NTS 
 | `Enabled`, `Priority` | per server | **not implemented**: Hermod asks every server in one race |
 | `Problem`, `CertificateStatus`, `CertificateFingerprint`, `RootFingerprint` | ro | ✔ from `LastJudgementOf`. Judgements live in memory only, so after a restart these are empty until the next handshake. |
 | `KnownSince` | ro | ✔ `KnownServers`, persisted |
-| Revocation | §2.3: own roots like the paper says; chains to roots of the operating system "are judged by the operating system" | Own roots: `RevocationMode.Online`, unknown status ignored (`WWCPNode.ServerCertificates.cs:491–494`). Chains to roots of the operating system: Hermod's TLS client defaults to `X509RevocationMode.NoCheck` (`Hermod/Hermod/TCP/TCPClient/ATLSClient.cs:490`), and the DNS client passes nothing else, so **revocation is not checked at all**. |
+| Revocation | §2.3: own roots like the paper says; chains to roots of the operating system "are judged by the operating system" | Own roots: `RevocationMode.Online`, unknown status ignored (`WWCPNode.ServerCertificates.cs:491–494`). Chains to roots of the operating system: Hermod's TLS client defaults to `X509RevocationMode.NoCheck` (`Hermod/Hermod/TCP/TCPClient/ATLSClient.cs:490`), and the DNS client passes nothing else, so **revocation is not checked at all**. Since 2026-11-05, the node asks itself (B.13 point 8). |
 
 ### A.4 Properties of the implementation that shape the mapping
 
@@ -101,7 +101,7 @@ All points except 10 and 11, which concern the NTS concept and the names in WWCP
 
 **Technical errors (first)**
 
-1. *§2.3 Revocation*: Chains to roots of the operating system are not "judged by the operating system" but not checked at all (A.3, last row). Either the paper says so, or the node's DNS client asks the operating system as well (`Online`, unknown status ignored, as `TryAnchor` does). B.13 point 8.
+1. *§2.3 Revocation*: Chains to roots of the operating system are not "judged by the operating system" but not checked at all (A.3, last row). Either the paper says so, or the node's DNS client asks the operating system as well (`Online`, unknown status ignored, as `TryAnchor` does). B.13 point 8: asked since 2026-11-05.
 2. *§2.5*: "authenticate them by a certificate issued for that address, by pins, or both" contradicts §2.3 point 1: a pin never replaces the name check. As long as there is no `AuthenticationName`, a server dialled by its IP address needs a certificate with that IP address as a *Subject Alternative Name*. Pins only narrow what is accepted then.
 3. *§3.1.3 and T14*: "Emptying … SHALL be rejected … The CSMS shall switch name resolution off instead." Switching off has the same effect as emptying: nothing resolves, the CSMS included (A.2, last row). The paper must say that a station whose CSMS is dialled by name refuses both, and it needs the pre-flight from point 8.
 
@@ -444,7 +444,27 @@ Settled with point 3 on 2026-11-05: under `IndependentRequests`, a new server is
      - in the model: any host lost blocking, a host not resolving now blocking, the warning not told to the CSMS, the warning not logged, a name of both counted for the legal time too, the legal time before the CSMS, the legal names not asked;
      - for the roots: a root the legal time needs going, a root the legal time can lose going without a word, the legal names not asked, the sources dropping the reason of a deletion.
 7. **May the CSMS change the name servers at all?** (settled) Yes, always, with no switch to lock them, as NTS concept B.14 point 1 decides for the legal group. What protects the station is the pre-flight (B.6) and the record: every change goes to the security log with its `Origin` (B.4 point 2), and changes from the web page or the CLI reach the CSMS as `ReconfigurationOfSecurityParameters` (B.11 point 5). SDNS §3.1.3 says so since 2026-10-29. The alternative was a switch `dns.ocpp: "readOnly"` for operators who set the resolvers locally.
-8. **Revocation for chains to the roots of the operating system** (A.6 point 1): check them (online, unknown status ignored) or document that they are not checked.
+8. **Revocation for chains to the roots of the operating system** (A.6 point 1; decided by Achim on 2026-11-05): checked as for the station's own roots, soft-fail. A certificate known to be revoked is refused; a status that cannot be had is not held against it. The fetch has a short time limit, because it runs inside the handshake. The alternative was to only document that they are not checked. Revocation offers little against an attacker on the path, since one who can block the resolver can block the OCSP or CRL fetch as well; pins and root groups are the stronger protection, and the paper says so.
+
+   *Done on 2026-11-05* in WWCP_Node's shared `JudgeServer` (`WWCPNode.ServerCertificates.cs`):
+   - **Where the handshake did not ask itself** (`ChainPolicy.RevocationMode == NoCheck`, as Hermod's DoT and DoH clients build the chain), the node asks. It rebuilds the machine's chain against the root it ended at, online, with `RevocationWait` (3 s) as `UrlRetrievalTimeout`. It asks only where a certificate in the chain, the root aside, names a CRL distribution point or an OCSP responder.
+   - **The verdict:** revoked is refused before any pin is asked, as `untrusted`. The error step names the certificate: "its certificate …" or "the certificate of '…' in its chain". A status that could not be had adds a notice step and nothing else.
+   - **Own roots:** `TryAnchor` asks with the same time limit (it had none) and reports a revoked certificate the same way, instead of "chains to no root".
+   - **NTS:** NTS-KE servers and the station's meters go through `JudgeServer` as well. For their own roots, the time limit and the revoked step reach them too.
+
+     Norn's NTS-KE client builds the machine's chain online itself (`NTSKE_TLSClient.NotifyServerCertificate`: `Online`, `EntireChain`, `NoFlag`, no time limit). For roots of the operating system it is therefore hard-fail today: a list out of reach is a chain error, then `TryAnchor`, then `untrusted`. The node does not ask such a chain again. Whether NTS becomes soft-fail there too is Achim's call, and not built.
+   - **Tests:** 11 `ServerRevocationTests` in the node. They serve the lists over HTTP on the loopback, signed by the test's own CAs:
+     - revoked, and on no list;
+     - a revoked CA in the chain;
+     - a list out of reach, and an OCSP responder out of reach;
+     - a list never sent, both for the machine's chain and for an own root, each bounded by the wait;
+     - a certificate naming no list;
+     - a chain the handshake built online;
+     - revoked under an own root, said as revoked;
+     - a list of a root nobody trusts, which says nothing.
+
+     They also pass under Linux (WSL, from the same build), together with the pinning tests: 69 green.
+   - **11 mutations**, 10 of them red in exactly their tests. The eleventh lets a list of a root nobody trusts count; it cannot be seen on Windows, which does not report such a certificate as revoked (the mutants were run there only). The test stands for it all the same.
 9. **Mixed transports** (settled on 2026-11-05: both): a list that mixes them is warned about, and `EncryptedOnly` is built (B.4 point 6).
 
 ### B.14 Implementation steps
