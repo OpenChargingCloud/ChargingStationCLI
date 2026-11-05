@@ -45,7 +45,7 @@ SDNS was written from this implementation, so Part A is shorter than in the NTS 
 | `QueryTimeout` | default "*(system)*" | `DNSClient.DefaultQueryTimeout` = **10 s**; 0.1…120 ✔ | name the 10 s in the paper |
 | `RecursionDesired` | default `Default` | The client starts with `RecursionDesired = true` (`DNSClient.cs:326`). A station built with nothing therefore reads `Set`; `Default` only after `"recursionDesired": null` was saved. | adjust the paper (A.6) |
 | `UDPPayloadSize`, `ClientSubnet` | ro | fixed at construction (`DNSConfigurationJSON().fixed`), next to `ednsOptions`, `cacheCleanUpEvery`, `negativeCacheTTL` | fits; the other three are not needed |
-| `EncryptedOnly` | rw | **not implemented** | small, in the node (B.4) |
+| `EncryptedOnly` | rw | **not implemented** | small, in the node (B.4); done on 2026-11-05 (B.4 point 6) |
 | `ServerSource` | rw, `System` / `Manual` | The node starts with the client's servers (`configuredDNSServers = [.. dnsClient.DNSServers]`, `WWCPNode.cs:778`) and refuses an empty list. It could not go back to `System` and read `"servers": null` as "not said" until B.4 point 7, done on 2026-11-04. | rw since B.4 point 7 |
 | Emptying every slot | refused only while `Enabled = true` | refused **always** | adjust the paper (A.6) |
 | `Enabled = false` | "the CSMS shall switch name resolution off instead" | Switched off, the client holds no servers and answers nothing (`DNSClient.cs:603`). There is no fallback to the resolver of the operating system, and the CSMS connection resolves through this client (A.4 point 8). | the paper contradicts itself (A.6) |
@@ -188,6 +188,25 @@ Points 1–9 of NTS concept B.3, built **once** for both bridges. For DNS, in ad
    - `TryUpdateDNSConfiguration(Func<JObject, JObject?> Change, out Error, out NotSaved, Origin = null)` asks the change for the section as `DNSConfigurationJSON` says it under the lock. A change that says null changes nothing. The JSON overload goes the same way.
 5. **A dry run of a configuration**: `Task<DNSPreflight> TryResolveWithAsync(JObject Section, IEnumerable<DomainName> Names, TimeSpan Within)`. It makes a separate `DNSClient` with the servers and pins of the section, judges certificates against those pins **without** writing news, learning pins or keeping judgements, and answers which names resolved, and what each server came to. `ResolveAsync` of the diagnostics only asks the configured servers. Needed for B.6. *Done on 2026-10-30* as `WWCPNode.ResolveWithAsync(Section, Names, Within)`, which returns a `DNSPreflight` with an `Error` for a section that would not be saved, and `JudgeServer(…, Remember: false)`, with kit tests.
 6. **`EncryptedOnly`** (small): refuse unencrypted transports while set, and stop asking such servers (SDNS §2.4).
+
+   *Done on 2026-11-05*, with the warning of B.13 point 9:
+   - **The node**:
+     - `"encryptedOnly"` in the `dns` section, `WWCPNode.DNSEncryptedOnly`, and `settings.encryptedOnly` in `GET /api/v1/configuration/dns`.
+     - While it is on, the client is given the servers over TLS or HTTPS alone. Those in clear text (UDP, TCP, plain HTTP) stay in the file, and are asked again once it is off.
+     - A change after which it is on is refused (`TryKeepEncryptedOnly`) for a server in clear text the node does not have: a new one, or one whose address, port or transport changed, naming `dns.servers[<n>]`; its timeout does not count. So is a list without an encrypted server, as an empty list is, and `"servers": null` where the servers the node was started with are in clear text, as the operating system's are.
+     - The dry run (B.4 point 5) refuses the same, and asks as the change would.
+     - The change line says `encrypted only = True, not asking udp://…`. A list that mixes the two is warned about (`dns`, `config`, `security`) at the start and whenever the servers change.
+   - **The bridge**: `DNSClientController.EncryptedOnly` is read and written as `encryptedOnly`, and the node's refusal names `DNSServerController[<id>]` as any other does. The 1.6 key `dns.encryptedOnly` is no longer NotSupported. WWCP_OCPP had the variable since step 3; only its description changed.
+   - **The page**: the switch "Only encrypted name servers" among the settings; a row in clear text says "not asked" while it is on, and a list that mixes the two is warned about above it while it is off.
+   - **Paper**: SDNS §2.4 (what the reference implementation warns of), §3.1.1, §3.1.3 (the rule), §3.2 (every key), T12.
+   - **Tests**:
+     - 10 `EncryptedOnlyTests` in the node, with 13 cases, one of which counts the questions at a server on the loopback.
+     - 2 page tests.
+     - In the station: 2 more `DNSDeviceModelWritingTests`, one more `DNSKeys16Tests`, T12 in `DNSTestCriteriaTests`, and `EncryptedOnly` in `DNSDeviceModelTests` and in the settings of `DNSEquivalenceTests`.
+   - **20 mutations**, each red in exactly its tests:
+     - in the node: the file's `encryptedOnly` not read; not written; servers in clear text asked all the same; a server in clear text the node does not have taken; one it has refused as well; no encrypted server at all taken; the servers it was started with not looked at; the dry run refusing nothing of it; the dry run asking servers in clear text; the change line not saying what is not asked; a list that mixes the two not warned about; `encryptedOnly` not shown; a change of it not put into effect;
+     - in the bridge: `EncryptedOnly` not read; not writable; written under another key; no 1.6 key;
+     - on the page: the switch not sent; a row in clear text not said to be not asked; a list that mixes the two not warned about.
 7. **`ServerSource` writable**: remember the servers the node was constructed with, and read `"servers": null` in a save as "remove the key", as for `recursionDesired`.
 
    *Done on 2026-11-04.*
@@ -251,7 +270,7 @@ A timer that rolls back after the change does not help here: the open WebSocket 
 | `UDPPayloadSize` | integer | ro | `fixed.udpPayloadSize` | |
 | `ClientSubnet` | string | ro | `fixed.clientSubnet` | `null` ⇒ `""` |
 | `ServerSource` | OptionList `System,Manual` | rw (B.4 point 7) | `serversFrom`: `file` ⇒ `Manual`, `start` ⇒ `System` | `System` writes `"servers": null`, `Manual` the servers asked |
-| `EncryptedOnly` | boolean | n/a until B.4 point 6 | `encryptedOnly` | not in the report until then ⇒ `UnknownVariable` |
+| `EncryptedOnly` | boolean | rw (B.4 point 6) | `settings.encryptedOnly` | Servers in clear text stay and are not asked; one coming is refused by the node, named as `DNSServerController[<id>]` |
 
 ### B.8 Variables: `DNSServerController[<id>]`
 
@@ -377,7 +396,7 @@ The same pattern applies to the keys of SDNS §3.2, once WWCP_OCPP can register 
 Limits: one key per request, so there is no exception for new servers. With the CSL rule "the last value repeats", a server added at the end of `dns.servers` takes the last transport of `dns.transports`, so an all-TLS list stays TLS; a mixed list passes through the last transport. Pins for the new server follow in a request of their own, and until then it is held to its chain only. The pre-flight (B.6) applies in 1.6 as well; `Rejected` carries no reason there. InstallCertificate with `NameServerRootCertificate` and `certificateGroup` goes through the same store.
 
 *Done on 2026-11-03* (`DNSDeviceModel.Keys16.cs`), on the pattern of NTS (`NTSDeviceModel.Keys16.cs`):
-- Every key of SDNS §3.2 but `dns.encryptedOnly`, which is NotSupported until B.4 point 6. The paper gained `dns.rootCAs` with it: without that key, a `certificateGroup` installed over 1.6 held no server to anything.
+- Every key of SDNS §3.2; `dns.encryptedOnly` since B.4 point 6 on 2026-11-05, NotSupported until then. The paper gained `dns.rootCAs` with it: without that key, a `certificateGroup` installed over 1.6 held no server to anything.
 - `dns.queryTimeouts` reads an empty or missing entry as the client's timeout, as `dns.ports` reads one as the transport's port. That is the paper's second exception to the CSL rules, since its table already said "empty: `dns.queryTimeout`".
 - A key becomes the SetVariables entries of `DNSClientController` and the servers, with ACID where it is several, and goes to the same model with the central system in its network path. So the checks, the pre-flight and the log line `(by ocpp:<id>)` are those of 2.1, and B.11 point 6 holds as well.
 - `dns.servers` changes addresses at their places, and ids and pins stay with their server. It adds servers at the end with the last server's `Transport`, `OnPinMismatch`, `TrustOnFirstUse` and `RootCAs`, but with no pins and with the default port and timeout. It removes the servers beyond its end; removing all of them is refused. Since B.13 point 3, the *n*-th place is the *n*-th id of `Servers`, a new server takes the id the node would give it at its place (`DNSConfiguration.IdsOf`, the next free `dns-<n>`), and adding or removing goes through a `Servers` entry with the others.
@@ -385,7 +404,7 @@ Limits: one key per request, so there is no exception for new servers. With the 
 
 ### B.13 Decisions
 
-Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS concept B.14), point 5 with the NTS paper on 2026-10-30, and point 3 by Achim on 2026-11-04 (built on 2026-11-05). The others are open; the numbers stay, because the rest of this document refers to them.
+Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS concept B.14), point 5 with the NTS paper on 2026-10-30, point 3 by Achim on 2026-11-04 (built on 2026-11-05), and point 9 by Achim on 2026-11-05 (built the same day). The others are open; the numbers stay, because the rest of this document refers to them.
 
 Settled with point 3 on 2026-11-05: under `IndependentRequests`, a new server is refused and `ACID` or `BASE` is asked for, as NTS concept B.10 does for a new client (B.9).
 
@@ -411,7 +430,7 @@ Settled with point 3 on 2026-11-05: under `IndependentRequests`, a new server is
 6. **Scope of the pre-flight** (B.6): the CSMS hosts only, or the NTS-KE hosts of the legal group as well, and whether those block or only warn.
 7. **May the CSMS change the name servers at all?** (settled) Yes, always, with no switch to lock them, as NTS concept B.14 point 1 decides for the legal group. What protects the station is the pre-flight (B.6) and the record: every change goes to the security log with its `Origin` (B.4 point 2), and changes from the web page or the CLI reach the CSMS as `ReconfigurationOfSecurityParameters` (B.11 point 5). SDNS §3.1.3 says so since 2026-10-29. The alternative was a switch `dns.ocpp: "readOnly"` for operators who set the resolvers locally.
 8. **Revocation for chains to the roots of the operating system** (A.6 point 1): check them (online, unknown status ignored) or document that they are not checked.
-9. **Mixed transports**: only warn (SDNS §2.4), or build `EncryptedOnly` right away (B.4 point 6).
+9. **Mixed transports** (settled on 2026-11-05: both): a list that mixes them is warned about, and `EncryptedOnly` is built (B.4 point 6).
 
 ### B.14 Implementation steps
 
@@ -442,7 +461,7 @@ The shared steps are those of NTS concept B.15 and are built **once**. DNS is th
    - The node has the dry run.
    - The station's `DNSDeviceModel` writes through `TryUpdateDNSConfiguration`.
 
-   B.4 points 1 to 4 followed on 2026-11-02 (step 2), and point 7 on 2026-11-04. Still open is B.4 point 6.
+   B.4 points 1 to 4 followed on 2026-11-02 (step 2), point 7 on 2026-11-04, and point 6 on 2026-11-05.
 6. **Certificates** (B.10), through the shared store interface, with B.4 point 8. *Done on 2026-11-03*, with `RootCAs`.
 
    Tests:
@@ -516,7 +535,7 @@ The shared steps are those of NTS concept B.15 and are built **once**. DNS is th
    | T9 | `DNSEventsTests.AnotherCertificateThanBeforeIsTold`; the node's `NameServerPinningTests.AnotherCertificateThanBeforeIsNews` |
    | T10 | `DNSEventsTests.ARefusedNameServerCertificateIsToldOnce`; the node's `NameServerPinningTests.WhatIsNewsIsToldOnceAndBelievingAgainToo` |
    | T11 | the node's `NameServerPinningTests.AChangeToWhatANameServerIsHeldToIsSaidAndCountsAtOnce` |
-   | T12 | open: `EncryptedOnly` is B.4 point 6 |
+   | T12 | `DNSTestCriteriaTests.OnlyEncryptedServersAreAskedAndNoneComesInClearText`; the node's `EncryptedOnlyTests.ServersInClearTextAreNotAskedWhenOnlyEncryptedOnesAre`, counted at the server, and `SwitchedOnTheServersInClearTextStayAndAreAskedAgainWhenItIsSwitchedOff` for the warning |
    | T13 | the node's `NameServersAskedTests.ANameServerOnItsOwnIsAskedOverWhatItIsConfiguredFor` (over TCP, never over UDP); Hermod's client asks a server over its own transport only (`DNSClient.GetOrCreateTransportClient`) |
    | T14 | `DNSDeviceModelWritingTests.NoServerAtAllIsRefused`; `DNSTestCriteriaTests.NoServerAtAllIsRefusedSwitchedOffToo` |
    | T14a | `DNSDeviceModelWritingTests.AServerKeepsItsIdWhenTheOneBeforeItIsTakenAway` |
