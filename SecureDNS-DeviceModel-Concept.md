@@ -251,7 +251,7 @@ What OCPP does have for networks is a fallback: `SetNetworkProfile` writes a slo
 4. `DNSClientController.Enabled = false` while a CSMS is dialled by name ⇒ `Rejected` without asking anything.
 5. Names that did not resolve before do not block a change, so a CSMS can repair a broken configuration.
 
-A timer that rolls back after the change does not help here: the open WebSocket stays up, so there is nothing to observe until the next reconnect. The pre-flight tests what matters before anything changes. The NTS-KE hosts (the legal time) are to be checked as well. A name there that would no longer resolve warns. The change is blocked only where none of the legal group's NTS-KE hosts would resolve any more while one resolves now (B.13 point 6, decided on 2026-11-05, not built yet). Changes on the web page are not checked; the page has its own test (`POST /api/v1/configuration/dns/query`).
+A timer that rolls back after the change does not help here: the open WebSocket stays up, so there is nothing to observe until the next reconnect. The pre-flight tests what matters before anything changes. The NTS-KE hosts (the legal time) are to be checked as well. A name there that would no longer resolve warns. The change is blocked only where none of the legal group's NTS-KE hosts would resolve any more while one resolves now (B.13 point 6, decided and built on 2026-11-05). Changes on the web page are not checked; the page has its own test (`POST /api/v1/configuration/dns/query`).
 
 ### B.7 Variables: `DNSClientController`
 
@@ -357,7 +357,7 @@ The station answers InstallCertificate, GetInstalledCertificateIds and DeleteCer
 - **InstallCertificate** marks a group as `dnsca-<g>` (a name the store cannot mark is `Rejected`). The root is labelled as the store labels it, by its common name, not by `G`. A root installed again keeps what it was for and gains `dns` and the mark.
 - **GetInstalledCertificateIds** and **DeleteCertificate** as above. A root kept for another service loses `dns` and its `dnsca-` marks and stays for that service.
 - **DeleteCertificate names a certificate, not a type**: `CertificateSources` deletes it from every source that holds it, after asking all of them. A root for name and time servers is therefore deleted for both, and the check of either one can keep it.
-- **The check before a deletion** is the one B.6 makes for a change: when the CSMS is dialled by a name and some name server is asked over TLS, the names are resolved twice, with the store as it is and without the root (`ResolveWithAsync(…, WithoutRoots)`, which `JudgeServer` passes to `TryAnchor`). A name that resolves now and would not then keeps the root: `Failed` with `CSMSUnreachable` (SDNS T21). For this, the shared `ICertificateSource.CheckDeletion` became `CheckDeletionAsync`, agreed with the NTS session.
+- **The check before a deletion** is the one B.6 makes for a change: when the CSMS is dialled by a name and some name server is asked over TLS, the names are resolved twice, with the store as it is and without the root (`ResolveWithAsync(…, WithoutRoots)`, which `JudgeServer` passes to `TryAnchor`). A name that resolves now and would not then keeps the root: `Failed` with `CSMSUnreachable` (SDNS T21). The NTS-KE servers of the legal time are resolved alongside since 2026-11-05 (B.13 point 6): none of them left keeps the root as `Failed` with `NTSKEUnreachable` (SDNS T23); some of them lost lets it go, `Accepted` with a status info of that reason code. For this, the shared `ICertificateSource.CheckDeletion` became `CheckDeletionAsync`, agreed with the NTS session.
 - **`RootCAs`** of `DNSServerController` is the server's `rootGroup` (B.8).
 - **The rule for other root types** needs nothing more: they stay in WWCP_OCPP's `InMemoryCertificates` and never reach the node's store, so they vouch for no name server.
 
@@ -427,7 +427,22 @@ Settled with point 3 on 2026-11-05: under `IndependentRequests`, a new server is
    Before: slots `1…16` are chosen because a standard CSMS can then add a server. NTS has since chosen the `id` field (NTS concept B.4 point 3, B.14 point 4) and ruled out positions for its servers, because they shift when a server is removed. The node gets the mechanism anyway, so `dns.servers[]` could carry slot numbers as ids; compacting would go away, and slots would stay stable across requests.
 4. **Transports over OCPP** (settled on 2026-11-05): `UDP, TCP, TLS, HTTPS, HTTPS_GET`, as recommended here and written into the paper (`bdfe66a`). `DNSServerController.Transport` offers exactly these. `HTTPS_JSON` only for diagnostics, `HTTPS_Binary` is the same as `HTTPS`, `HTTP*` only for tests. A server configured locally with another transport still reads back as it is.
 5. **Data type of pin lists** (settled): `string`, in both papers. NTS concept B.9 had `SequenceList`, which takes only values of the `valuesList`. Since 2026-10-30 the NTS paper and concept have comma separated strings for every list (NTS concept A.6, Whitepapers `4e5e43d`), as SDNS always had (A.6 point 10).
-6. **Scope of the pre-flight** (B.6; decided by Achim on 2026-11-05, not built yet): the NTS-KE hosts of the legal group are checked as well. A failure there only warns, "unless the errors are really serious", in which case it blocks as the CSMS hosts do. Serious, as Achim confirmed the same day: none of the legal group's NTS-KE hosts would resolve any more, while at least one resolves now, so that the legal time would be lost. One host of several that would no longer resolve only warns. It is to be built in the bridge's new place (point 1), and the paper's §3.1.3 says it then.
+6. **Scope of the pre-flight** (B.6; decided by Achim on 2026-11-05): the NTS-KE hosts of the legal group are checked as well. A failure there only warns, "unless the errors are really serious", in which case it blocks as the CSMS hosts do. Serious, as Achim confirmed the same day: none of the legal group's NTS-KE hosts would resolve any more, while at least one resolves now, so that the legal time would be lost. One host of several that would no longer resolve only warns.
+
+   *Done on 2026-11-05*, in the bridge's new place (point 1), and the paper's §3.1.3 says it, with T22 and T23:
+   - `DeviceModelBridge.LegalTimeNamesOf` gives the DNS model and `DNSRootCertificates` the host names of the enabled legal groups' enabled sources. IP addresses are left out, since they need no name resolution.
+   - The pre-flight resolves them together with the CSMS names. A name in both lists counts as a CSMS name, and a CSMS cut off is `CSMSUnreachable` whatever happens to the legal time.
+   - If none would resolve any more while one does now, every entry is `Rejected` with `NTSKEUnreachable`. If only some would no longer resolve, every entry is `Accepted` with a status info of that reason code, naming the hosts lost and those kept, and the node logs the same.
+   - Switching name resolution off counts as nothing resolving. Names that do not resolve now block nothing.
+   - Deleting a `NameServerRootCertificate` follows the same rule: `Failed`, or `Accepted` with the reason. For this, `CertificateSources.DeleteAsync` now passes on the first answer that carries a reason code.
+   - **Tests**: 9 more in the kit, so they run on the bare node and in the station:
+     - 5 `DNSDeviceModelWritingTests`: all lost, some lost, a host not resolving now, switching off, the CSMS first;
+     - 2 `DNSEquivalenceTests`: T22 by both versions, and a legal group that is switched off;
+     - 2 `DNSRootCertificatesTests`: T23 against a name server over TLS, and some lost through a seam that resolves without the root.
+   - **14 mutations**, each red in exactly its tests:
+     - in the bridge: no legal names for the model, none for the roots, a switched-off legal group counting;
+     - in the model: any host lost blocking, a host not resolving now blocking, the warning not told to the CSMS, the warning not logged, a name of both counted for the legal time too, the legal time before the CSMS, the legal names not asked;
+     - for the roots: a root the legal time needs going, a root the legal time can lose going without a word, the legal names not asked, the sources dropping the reason of a deletion.
 7. **May the CSMS change the name servers at all?** (settled) Yes, always, with no switch to lock them, as NTS concept B.14 point 1 decides for the legal group. What protects the station is the pre-flight (B.6) and the record: every change goes to the security log with its `Origin` (B.4 point 2), and changes from the web page or the CLI reach the CSMS as `ReconfigurationOfSecurityParameters` (B.11 point 5). SDNS §3.1.3 says so since 2026-10-29. The alternative was a switch `dns.ocpp: "readOnly"` for operators who set the resolvers locally.
 8. **Revocation for chains to the roots of the operating system** (A.6 point 1): check them (online, unknown status ignored) or document that they are not checked.
 9. **Mixed transports** (settled on 2026-11-05: both): a list that mixes them is warned about, and `EncryptedOnly` is built (B.4 point 6).
@@ -546,6 +561,8 @@ The shared steps are those of NTS concept B.15 and are built **once**. DNS is th
    | T19 | `DNSDeviceModelWritingTests.SwitchedOffWhileTheCSMSIsDialledByNameIsRefused`; `DNSKeys16Tests.SwitchedOffWhileTheCentralSystemIsDialledByNameIsRejected` |
    | T20 | `DNSEquivalenceTests.ANameServerTheCSMSWouldNotResolveThroughIsRefusedByEitherVersion`; `DNSDeviceModelWritingTests.AChangeThatCutsTheCSMSOffIsRefused` |
    | T21 | `DNSRootCertificatesTests.ARootTheNamesOfTheCSMSResolveThroughIsKept` |
+   | T22 | `DNSEquivalenceTests.ANameServerTheLegalTimeWouldNotResolveThroughIsRefusedByEitherVersion`; `DNSDeviceModelWritingTests.AChangeThatLeavesTheLegalTimeNoNTSKEServerIsRefused`, `AChangeThatKeepsTheLegalTimeAnNTSKEServerIsMadeAndSaysWhatItLoses` |
+   | T23 | `DNSRootCertificatesTests.ARootTheLegalTimeResolvesThroughIsKeptByTheBridge`, `ARootTheLegalTimeCanDoWithoutGoesAndTheAnswerSaysWhatItCosts` |
 
    17 mutations, each red in exactly its tests:
    - the port rule gone;
