@@ -158,12 +158,23 @@ The node's NTS groups (the runtime object `NTSGroup` plus `nts.groups` in the fi
 
 It follows that validation, the quorum check, pins, writing the file, log entries and applying live happen **exactly once, and the same way everywhere**.
 
-Dependencies: WWCP_Node stays free of OCPP, because it serves every CLI (roaming hub, LC, …). WWCP_OCPP stays free of the node. The bridge lives **in the station program** (`libs/ChargingStation`), next to `ConfigureWebPayments`. If the Local Controller needs it later as well, it moves into a small adapter assembly.
+Dependencies: WWCP_Node stays free of OCPP, because it serves every CLI (roaming hub, LC, …), and WWCP_OCPP's libraries stay free of the node. The bridge was built in the station program (`libs/ChargingStation`), next to `ConfigureWebPayments`, and written against `WWCPNode` alone, so that it could move.
+
+*Moved on 2026-11-05*, with Achim's decisions of that day (SecureDNS concept B.13 point 1):
+- **Where.** A project of its own in the WWCP_OCPP repository, `WWCP_OCPP_Node`, for both versions and for both bridges, the time servers' and the name servers'. It references `..\..\WWCP_Node`; WWCP_OCPP's other libraries do not.
+- **What.** The bridge classes (`NTSDeviceModel*`, `DNSDeviceModel*`, `NTSRootCertificates`, `DNSRootCertificates`, namespace `cloud.charging.open.protocols.OCPP.Node`), and the wiring:
+  - `DeviceModelBridge(Node, NamesToKeepResolving, DialsOCPP2_1, DialsOCPP1_6)` is made once per node. It follows the node's events and tells the CSMS, as `ChargingStation.NTSEvents.cs` and `ChargingStation.DNSEvents.cs` did.
+  - `Configure(IDeviceModelNode)` and `Configure(IConfigurationKeysNode)` take over `ConfigureNTS` and `ConfigureDNS` of both versions. The node handed last is the one whose components follow the groups and servers (`FollowNTSGroups`, `FollowDNSServers`) and whose queue is told.
+  - `IDeviceModelNode` (WWCP_OCPPv2.1) and `IConfigurationKeysNode` (WWCP_OCPPv1.6_ChargePoint) say what the bridge needs of an OCPP node. `AChargingStationNode` and `AChargePointNode` offer them, and a local controller gets the bridges with the same calls once its node does.
+- **What stays in the station.** Which names its connections are dialled by and which versions they speak, `BuildOCPPNodes` with `ConfigureWebPayments`, and the queues on disk.
+- **The tests** moved into `WWCP_OCPP_Node_TestKit` as abstract fixtures over `IBridgedNode`, as WWCP_Node_TestKit's tests are. `WWCP_OCPP_Node_Tests` runs them against a bare `WWCPNode` with the test nodes of both versions, and the station's suite against a station. The rebuild for changed EVSEs became `IBridgedNode.NewOCPPNodes()`. That the queue is a file beside the configuration is the station's own test (`StationBridgeTests`).
+
+File names in the sections below are those of the day a step was built.
 
 ```
  Web page / CLI / API ───┐                         ┌── CSMS: Get/SetVariables, GetReport,
                          ▼                         ▼   InstallCertificate, …
-             WWCPNode.TryUpdateNTSConfiguration ◄── NTSDeviceModelBridge (ChargingStation)
+             WWCPNode.TryUpdateNTSConfiguration ◄── DeviceModelBridge (WWCP_OCPP_Node)
              WWCPNode.TryAddNTSGroup / TryRemove…      ▲   ValueGetter/Setter, Tx hook
                          │                            │            │
           file nts.groups + NTSGroup (runtime)        │            ▼

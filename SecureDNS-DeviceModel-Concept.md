@@ -137,12 +137,12 @@ As in the NTS concept (B.1 there): the node's `dns` section (the file plus the r
 
 Validation, the pin rules, writing the file, the log and applying live happen **exactly once, and the same way everywhere**. The bridge checks only what is OCPP's: component, instance, variable, attribute type, data type and range. Every rule about DNS (pins only for TLS and HTTPS, `onMismatch` only with a pin, ≤ 16 servers, no empty list) stays in the node, and its sentence goes to the CSMS.
 
-The bridge lives in the station program next to the NTS bridge and `ConfigureWebPayments`, and is written against `WWCPNode` alone, so that both bridges can move into one adapter assembly later (NTS concept B.1).
+The bridge was built in the station program next to the NTS bridge and `ConfigureWebPayments`, written against `WWCPNode` alone, so that both bridges could move into one adapter assembly later. Since 2026-11-05 both live in `WWCP_OCPP_Node`, a project of its own in the WWCP_OCPP repository (B.13 point 1, NTS concept B.1).
 
 ```
  Web page / CLI / API ───┐                           ┌── CSMS: Get/SetVariables, GetReport,
                          ▼                           ▼   InstallCertificate, …
-         WWCPNode.TryUpdateDNSConfiguration ◄── DNSDeviceModelBridge (ChargingStation)
+         WWCPNode.TryUpdateDNSConfiguration ◄── DeviceModelBridge (WWCP_OCPP_Node)
                          │                       ▲    ValueGetter, Tx hook, slot table,
      file "dns" + DNSClient (runtime)            │    pre-flight
                          │                       │            │
@@ -404,11 +404,11 @@ Limits: one key per request, so there is no exception for new servers. With the 
 
 ### B.13 Decisions
 
-Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS concept B.14), point 5 with the NTS paper on 2026-10-30, point 3 by Achim on 2026-11-04 (built on 2026-11-05), point 9 by Achim on 2026-11-05 (built the same day), and points 4 and 6 by Achim on 2026-11-05. The others are open; the numbers stay, because the rest of this document refers to them.
+Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS concept B.14), point 5 with the NTS paper on 2026-10-30, point 3 by Achim on 2026-11-04 (built on 2026-11-05), point 9 by Achim on 2026-11-05 (built the same day), points 4 and 6 by Achim on 2026-11-05, and point 1 by Achim on 2026-11-05 (built the same day). The others are open; the numbers stay, because the rest of this document refers to them.
 
 Settled with point 3 on 2026-11-05: under `IndependentRequests`, a new server is refused and `ACID` or `BASE` is asked for, as NTS concept B.10 does for a new client (B.9).
 
-1. **Location of the bridge**: in ChargingStation first, then together with the NTS bridge into an adapter assembly (NTS concept B.1). Decide for both together.
+1. **Location of the bridge** (settled by Achim on 2026-11-05, built the same day): a project of its own in the WWCP_OCPP repository, `WWCP_OCPP_Node`, for both bridges and both versions, with the wiring and with the tests as a kit that every kind of node runs against itself. How it is built is in NTS concept B.1.
 2. **Names** (settled): `DNSClientController` and `DNSServerController`, so that both extensions are named alike, as NTS concept B.14 point 2 asks: `NTPController`, `NTPClientGroupController` and `NTPClientController` there. The paper uses these names since 2026-10-29. WWCP_OCPP's placeholders `DNSCtrlr` and `DNSServerCtrlr` are replaced (B.3 point 1). The alternative was the OCPP-customary `…Ctrlr` of the standard components, which this concept had recommended.
 3. **Slots or ids** (settled on 2026-11-04: **ids**, as for NTS). *Done on 2026-11-05*:
    - **The node**: `dns.servers[].id` (B.4 point 9), read by `DNSConfiguration` with the syntax and `IdsOf` of the time servers, `dns-<n>` where the file gives none, and refused twice in one list. `GET /api/v1/configuration/dns` names every server with its id, `DNSServerIds` says them, the change line says `server ids = …` where they change, and a learned pin keeps the file's ids. "servers": null gives back servers without ids.
