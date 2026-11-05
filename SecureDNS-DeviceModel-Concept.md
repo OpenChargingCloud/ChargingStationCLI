@@ -54,7 +54,7 @@ SDNS was written from this implementation, so Part A is shorter than in the NTS 
 
 | Variable | Paper | Implementation |
 |---|---|---|
-| *Instance* | fixed slots `"1"` … `"16"` | a list `servers[]` without ids. A server **is** its transport, address and port (`NameOf`, `WWCPNode.NameServerCertificates.cs:84`); the timeout does not count. WWCP_OCPP's placeholder `DNSServerCtrlr` is another `AuthCtrlr` copy. |
+| *Instance* | fixed slots `"1"` … `"16"` (ids since B.13 point 3) | a list `servers[]` without ids (an optional `id` since B.4 point 9). A server **is** its transport, address and port (`NameOf`, `WWCPNode.NameServerCertificates.cs:84`); the timeout does not count. WWCP_OCPP's placeholder `DNSServerCtrlr` is another `AuthCtrlr` copy. |
 | `Address` | IP address or domain name, ≤ 253 | ✔ `address` (or `domainName`, or a plain string). `ServerJSON` writes IPv6 in the short form of RFC 5952, `NameOf` (log, known servers) in the long one. |
 | `Port` | default by transport | ✔ when reading the file. But `ServerJSON` always writes the resolved port, so after the first save through the node the file holds explicit ports (A.4 point 4). |
 | `Transport` | six values | ✔ the six, plus four more (A.1). The node takes any member case-insensitively, and through `Enum.TryParse` also any **number**, even an undefined one (B.15). |
@@ -199,7 +199,7 @@ Points 1–9 of NTS concept B.3, built **once** for both bridges. For DNS, in ad
      - `GET /api/v1/configuration/dns` says `"serversFrom": "file"` or `"start"`. The README says all of this.
    - **The bridge:**
      - `ServerSource` reads `Manual` for the file's servers and `System` for the start ones.
-     - `System` sends `"servers": null`, after the pre-flight, and cannot be one change with a `DNSServerController` entry. After `System`, the slot table is the node's again.
+     - `System` sends `"servers": null`, after the pre-flight, and cannot be one change with a `DNSServerController` entry. After `System`, the server table is the node's again.
      - `Manual` writes the servers asked into the file.
      - OCPP 1.6 has no key for it.
    - **The page** does not offer it yet: its save always sends the list.
@@ -207,20 +207,18 @@ Points 1–9 of NTS concept B.3, built **once** for both bridges. For DNS, in ad
 
    *Done on 2026-11-03* (`NameServerRootsChanged` in `WWCPNode.NameServerCertificates.cs`): at every change of the store, a server whose last accepted judgement was anchored at a root of the store that no longer anchors it loses its connection and its judgement, with a line tagged `dns`, `certificates`, `security`. That covers a root deleted, switched off, no longer for `dns`, or no longer marked for the server's group. `TryAnchor` and this check take the anchors from the same `AnchorsFor`. A server believed through a root the machine trusts keeps its connection. NTS-KE is not touched.
 
-A stable server id as in NTS concept B.4 point 3 is not needed here, because slots are the instances (B.5; B.13 point 3).
+9. **Server ids** (B.13 point 3): an optional field `"id"` per entry of `dns.servers`, with the syntax of NTS concept B.4 point 3 and unique within the list, as the instance of `DNSServerController`. Entries without `id` are `dns-<n>`. *Done on 2026-11-05*, see B.13 point 3.
 
 ### B.5 Components and instances
 
 | OCPP component | Instance | In the node | Life cycle |
 |---|---|---|---|
 | `DNSClientController` *(new)* | none | the `dns` section without `servers` | fixed |
-| `DNSServerController` *(new)* | `"1"` … `"16"` | `servers[n-1]` | fixed; an empty `Address` means unused |
+| `DNSServerController` *(new)* | the server id (B.4 point 9) | the entry of `servers` with that `id` | added and removed through `DNSClientController.Servers` |
 
-**Slots instead of ids** (unlike NTS): the node keeps no ids, there are no groups, the order means nothing in a race, and a standard CSMS cannot create instances. With fixed slots, adding a server is an ordinary *SetVariables* of its `Address`.
+**Ids instead of slots** (since 2026-11-05, B.13 point 3), as for NTS: a server keeps its id whatever its address becomes and whatever is added or taken away around it, so nothing compacts and an instance means the same server across requests. A CSMS adds a server by naming a new id in `DNSClientController.Servers` together with the server's `Address`, as it adds a time server through `NTPClientGroupController.Clients`. Before, the instances were fixed slots `"1"` … `"16"`: a standard CSMS could add a server with an ordinary *SetVariables* of an `Address`, but slot numbers shifted when a server was emptied, and only the slot table of one request held them still.
 
-**Compacting**: the node holds a list without gaps, so servers behind an emptied slot move up. That happens **after** a request: within one request, slot numbers keep referring to the servers they referred to at its start (the slot table, B.9).
-
-**Registration**: all 17 instances, empty slots included, after every build and rebuild in `BuildOCPPNodes`, next to `ConfigureWebPayments` (`ChargingStation.Configuration.cs:1715`). GetVariables on an empty slot answers `Accepted` with `""`, not `UnknownComponent`: the instance exists.
+**Registration**: `DNSClientController` and one `DNSServerController` per server, on the OCPP 2.1 node built last, together with the model as an `INewInstancesSource`. The station follows every `OnDNSConfigurationChanged` (`FollowDNSServers`, as `FollowNTSGroups`), so a server added or taken away on the page comes or goes as an instance at once. A server the station does not have is `UnknownComponent`, unless the request's `Servers` names it anew (B.9).
 
 ### B.6 No standard counterpart, and the CSMS connection
 
@@ -248,17 +246,18 @@ A timer that rolls back after the change does not help here: the open WebSocket 
 | `DNSSECOK` | boolean | rw | `dnssecOK` | |
 | `FollowCNAMEs` | boolean | rw | `followCNAMEs` | |
 | `MaxCNAMEFollows` | integer 0…255 | rw | `maxCNAMEFollows` | |
+| `Servers` | string, comma separated ids, ≤ 16 | rw | the `id`s of `servers`, in order | A new id ⇒ a new server, whose `Address` must come in the same request. A missing id ⇒ the server is removed. The order is the order in the file, not a priority. Read from the instances, so it cannot disagree with them. |
 | `MaxServers` | integer | ro | `limits.maxServers` | 16 |
 | `UDPPayloadSize` | integer | ro | `fixed.udpPayloadSize` | |
 | `ClientSubnet` | string | ro | `fixed.clientSubnet` | `null` ⇒ `""` |
 | `ServerSource` | OptionList `System,Manual` | rw (B.4 point 7) | `serversFrom`: `file` ⇒ `Manual`, `start` ⇒ `System` | `System` writes `"servers": null`, `Manual` the servers asked |
 | `EncryptedOnly` | boolean | n/a until B.4 point 6 | `encryptedOnly` | not in the report until then ⇒ `UnknownVariable` |
 
-### B.8 Variables: `DNSServerController[<slot>]`
+### B.8 Variables: `DNSServerController[<id>]`
 
 | Variable | Type (characteristics) | Mutability | Node key | Note |
 |---|---|---|---|---|
-| `Address` | string[253] | rw | `servers[n-1].address` | `""` empties the slot; IPv6 in the short form |
+| `Address` | string[253] | rw | `servers[id].address` | `""` ⇒ `Rejected`: a server is removed through `Servers`; IPv6 in the short form |
 | `Port` | integer 1…65535 | rw | `port` | the port rule in B.9 |
 | `Transport` | OptionList `UDP,TCP,TLS,HTTPS,HTTPS_GET` | rw | `transport` | B.13 point 4 |
 | `QueryTimeout` | decimal s, 0.1…120 | rw | `queryTimeoutSeconds` | `""` ⇒ the client's |
@@ -266,14 +265,14 @@ A timer that rolls back after the change does not help here: the open WebSocket 
 | `RootPins` | string[2500], ≤ 16 comma separated | rw | `rootFingerprint` and `rootFingerprints` | |
 | `OnPinMismatch` | OptionList `Refuse,Record,Accept` | rw | `onMismatch`, missing = `Refuse` | B.9 |
 | `TrustOnFirstUse` | OptionList `None,Root,Certificate` | rw | `trustOnFirstUse`, missing = `None` | the learned pin changes `RootPins`/`CertificatePins` without a request |
-| `RootCAs` | string[50] | rw | `rootGroup` | `""` ⇒ no group; a name the store cannot mark is refused before the node is asked; kept with the slot when its server changes (B.9) |
+| `RootCAs` | string[50] | rw | `rootGroup` | `""` ⇒ no group; a name the store cannot mark is refused before the node is asked; kept with the server when its address changes (B.9) |
 | `Problem` | boolean | ro | `judgement.accepted` | `true` when a judgement exists and refused |
 | `CertificateStatus` | OptionList `Accepted,Recorded,Tolerated,PinMismatch,Untrusted,WrongName,NoCertificate` | ro | `judgement.outcome` | `""` before the first handshake, after a restart, and for unencrypted transports |
 | `CertificateFingerprint`, `RootFingerprint` | string | ro | `judgement.certificate`, `judgement.root` | |
 | `KnownSince` | dateTime | ro | `known.since` | |
 | `AuthenticationName`, `Enabled`, `Priority` | n/a | n/a | not implemented | not in the report ⇒ `UnknownVariable` until the node supports them |
 
-An empty slot reports `""` for every variable.
+A server the station does not have is not there: GetVariables answers `UnknownComponent`.
 
 ### B.9 Writing: OCPP → node
 
@@ -281,7 +280,10 @@ An empty slot reports `""` for every variable.
 
 | Case | Status | `reasonCode` |
 |---|---|---|
-| instance not `1`…`16` | `UnknownComponent` | none |
+| an instance the station does not have, and that the request's `Servers` does not name anew | `UnknownComponent` (WWCP_OCPP, before the bridge) | none |
+| `Address = ""` | `Rejected` | `InvalidValue`: removed through `Servers` |
+| `Servers` empty, an id not of the id syntax, an id twice | `Rejected` | `InvalidValue` |
+| `Servers` with more than `MaxServers` ids | `Rejected` | `ValueOutOfRange` |
 | unknown variable | `UnknownVariable` | none |
 | `attributeType` ≠ Actual | `NotSupportedAttributeType` | none |
 | ReadOnly | `Rejected` | `ReadOnly` |
@@ -290,32 +292,35 @@ An empty slot reports `""` for every variable.
 | `OldAttributeValue` ≠ the getter's current value | `Rejected` | `ValueChanged`, as in the NTS concept, until the Safe & Secure paper settles a code |
 | the same variable twice in the request | `Rejected` | `InvalidValue` |
 
-**The slot table.** At the start of a request, the bridge reads slots 1…16 from one snapshot, filled up with empty slots. The table stays addressed by slot for the **whole** request, even though the node holds a compacted list after every change. Otherwise, after slot 2 was emptied, a later entry for slot 3 would hit the server that moved up into it.
+**The server table.** At the start of a request, the bridge reads the servers by their ids from one snapshot. After a change it holds what the node holds. Ids do not shift, so an entry means the same server whatever an entry before it took away.
+
+**New servers.** An entry of `DNSServerController[<id>]` for an id the station does not have reaches the bridge only through `INewInstancesSource` (NTS concept B.10): the bridge makes a stand-in (`DNSServerController.NewInstance`) where the request's `DNSClientController.Servers` names the id, and only there.
 
 **Depending on `DataConsistencyModel`** (SDNS §3.1.3, the same semantics as NTS concept B.10):
 
-- **`IndependentRequests`** (and without the field): every entry is one change, in request order, each with its own result. **Exception**: all entries of a slot that was empty at the start of the request form **one** change, applied where its `Address` entry stands, so that a new encrypted server never starts as a UDP server. Without an `Address` in the request, these entries are `Rejected` ("slot N is unused; set its Address in the same request").
-- **`ACID`**: all DNS entries of the request are one change. The causing entries `Rejected`, all others `Rolledback`.
-- **`BASE`**: like `ACID`, but each component instance (`DNSClientController`, each slot) is a change of its own.
+- **`IndependentRequests`** (and without the field): every entry is one change, in request order, each with its own result. **Exception**: the entries of a server that the request's `Servers` adds form **one** change with that `Servers` entry, applied where it stands, so that a new encrypted server never starts as a UDP server. Without an `Address` for it in the request, they and the `Servers` entry are `Rejected` ("'DNSServerController[x]' is new: set its Address in the same request"). Unlike NTS concept B.10, which refuses a new client id here and asks for `ACID`, the DNS paper had promised this exception for new servers since T2a; it stays, for ids.
+- **`ACID`**: all DNS entries of the request are one change. The causing entries `Rejected`, all others `Rolledback`. A server `Servers` removes cannot be set in the same change: those entries and `Servers` are `Rejected`.
+- **`BASE`**: like `ACID`, but each server the station has is a change of its own, and `DNSClientController` one together with the servers its `Servers` adds (`BaseUnitOf`).
 
 **Building the section**, per change:
 
 - Variables of `DNSClientController` become keys at the top level; `RecursionDesired = Default` becomes `"recursionDesired": null`.
-- As soon as a `DNSServerController` entry is part of it: apply the change to the slot table, then `servers` from the used slots **in slot order**, i.e. the whole list (A.4 point 3).
-- Per server: `address`, `transport`, `queryTimeoutSeconds`, `certificateFingerprints`, `rootFingerprints`. `trustOnFirstUse` only when ≠ `None`. `onMismatch` only when ≠ `Refuse` **and** the slot keeps a pin or learns one; otherwise it is dropped, as the node does for a page (`TryAfterAPageSaved`), and a monitor on `OnPinMismatch` sees the change.
+- `Servers` first: the servers in its order, the ones it names anew new, the ones it leaves out gone.
+- As soon as a `DNSServerController` entry or `Servers` is part of it: apply the change to the server table, then `servers` from the table **in its order**, i.e. the whole list (A.4 point 3), each server with its `id`. So the ids the node derived by place are written into the file at the first change through OCPP, as NTS concept B.4 point 3 has it.
+- Per server: `id`, `address`, `transport`, `queryTimeoutSeconds`, `certificateFingerprints`, `rootFingerprints`. `trustOnFirstUse` only when ≠ `None`. `onMismatch` only when ≠ `Refuse` **and** the server keeps a pin or learns one; otherwise it is dropped, as the node does for a page (`TryAfterAPageSaved`), and a monitor on `OnPinMismatch` sees the change.
 - **The port rule**: when the change switches the transport and names no `Port`, `port` is left out if the old port was the default of the old transport. Otherwise "UDP on 53" would become a DoT server on port 53 after `Transport = TLS` (A.4 point 4).
 - **`pinsAsShown`** on every server, with the pins as the bridge read them at the start of the request, or wrote them itself since. The node then merges a pin that trust on first use learned in the meantime instead of overwriting it (A.4 point 5).
 
 **Pre-flight** (B.6), then **one** call of `TryUpdateDNSConfiguration` per change, with `Origin = ocpp:<sender>`, under one lock (B.4 point 4). With `IndependentRequests` these are several calls in a row, each with its own diff line, like several saves on the page.
 
 - **The sender** is the start of the request's network path, which WWCP_OCPP hands every entry (`SetVariableEntry.Request`). A CSMS connected directly is `CSMS` there, not its own id, so the origin is `ocpp:CSMS`. An empty path counts as `CSMS` too.
-- **A list changed elsewhere**: the change is made from the list the node holds under the lock. If that list is not the one in the slot table, the change is refused with `ValueChanged` and nothing is sent. "Not the one" is judged as the node tells servers apart: the IPv6 short form and a port written out are the same server. An example is a server added on the page while the request was being made. Sending the whole list back would write that server away, and the pre-flight was run against the table's list. The CSMS reads again and decides.
+- **A list changed elsewhere**: the change is made from the list the node holds under the lock. If that list is not the one in the server table, the change is refused with `ValueChanged` and nothing is sent. "Not the one" is judged as the node tells servers apart, ids included: the IPv6 short form and a port written out are the same server, another id is not. An example is a server added on the page while the request was being made. Sending the whole list back would write that server away, and the pre-flight was run against the table's list. The CSMS reads again and decides.
 
 **Results**, per change for all its entries:
 
 - Success ⇒ `Accepted`. `RebootRequired` never occurs: the node applies everything live.
 - `NotSaved` ⇒ `Rejected` with `InternalError`; nothing was put into effect (SDNS §3.1.3, T17).
-- A refusal by the node ⇒ `Rejected` with `InvalidValue` (with `ACID`: the causing entries `Rejected`, all others `Rolledback`). `additionalInfo` is the node's sentence, with `'dns.servers[i]'` (the index in the compacted list) rewritten to `DNSServerController[<slot>]`, cut to the 1024 characters of the OCPP 2.1 schema (A.6 point 9). The node does not say which entry caused the refusal; the bridge takes the slot from the rewritten sentence, otherwise all entries of the change.
+- A refusal by the node ⇒ `Rejected` with `InvalidValue` (with `ACID`: the causing entries `Rejected`, all others `Rolledback`). `additionalInfo` is the node's sentence, with `'dns.servers[i]'` (the index in the list sent) rewritten to `DNSServerController[<id>]`, cut to the 1024 characters of the OCPP 2.1 schema (A.6 point 9). The node does not say which entry caused the refusal; the bridge takes the server from the index, otherwise all entries of the change.
 
 The admin role check in the SetVariables handler stays in front of all this. Before each change the bridge logs "A CSMS changes the name resolution of this charging station (by ocpp:CSMS): <change>" with the tags `dns` and `ocpp`, like `PutDNSConfiguration` does for the page. The node's diff line ends in "(by ocpp:CSMS)".
 
@@ -340,7 +345,7 @@ The station answers InstallCertificate, GetInstalledCertificateIds and DeleteCer
 ### B.11 Node → OCPP: changes from elsewhere
 
 1. **Values**: nothing to do, because the getters read live.
-2. **Structure**: fixed slots, so no components come or go. A server removed on the page moves the servers behind it up, and monitors on every moved slot fire.
+2. **Structure**: a server added or removed on the page is an instance that comes or goes, at the same `OnDNSConfigurationChanged` (B.5, `FollowDNSServers`). The servers behind a removed one keep their ids where the page sends them back, as it does since 2026-11-05. Until then, slots moved up and monitors on every moved slot fired.
 3. **Monitoring**: `OnDNSConfigurationChanged` ⇒ the bridge compares the projected values with the last reported state and calls `VariableChanged` for each changed variable, which yields `NotifyEvent` with `Delta` (NTS concept B.3 point 6). `OnServerNews` does the same for `Problem`, `CertificateStatus`, the fingerprints and `KnownSince`.
 4. **`OnServerNews` ⇒ `SecurityEventNotification`**, with `techInfo` = the server's name (`tls://192.0.2.53:853`) and the fingerprints involved, ≤ 255 characters:
 
@@ -374,17 +379,33 @@ Limits: one key per request, so there is no exception for new servers. With the 
 *Done on 2026-11-03* (`DNSDeviceModel.Keys16.cs`), on the pattern of NTS (`NTSDeviceModel.Keys16.cs`):
 - Every key of SDNS §3.2 but `dns.encryptedOnly`, which is NotSupported until B.4 point 6. The paper gained `dns.rootCAs` with it: without that key, a `certificateGroup` installed over 1.6 held no server to anything.
 - `dns.queryTimeouts` reads an empty or missing entry as the client's timeout, as `dns.ports` reads one as the transport's port. That is the paper's second exception to the CSL rules, since its table already said "empty: `dns.queryTimeout`".
-- A key becomes the SetVariables entries of `DNSClientController` and the slots, with ACID where it is several, and goes to the same model with the central system in its network path. So the checks, the pre-flight and the log line `(by ocpp:<id>)` are those of 2.1, and B.11 point 6 holds as well.
-- `dns.servers` changes addresses at their places, and pins stay with their slot. It adds servers at the end with the last server's `Transport`, `OnPinMismatch`, `TrustOnFirstUse` and `RootCAs`, but with no pins and with the default port and timeout. It empties the slots beyond its end; emptying all of them is refused by the node.
+- A key becomes the SetVariables entries of `DNSClientController` and the servers, with ACID where it is several, and goes to the same model with the central system in its network path. So the checks, the pre-flight and the log line `(by ocpp:<id>)` are those of 2.1, and B.11 point 6 holds as well.
+- `dns.servers` changes addresses at their places, and ids and pins stay with their server. It adds servers at the end with the last server's `Transport`, `OnPinMismatch`, `TrustOnFirstUse` and `RootCAs`, but with no pins and with the default port and timeout. It removes the servers beyond its end; removing all of them is refused. Since B.13 point 3, the *n*-th place is the *n*-th id of `Servers`, a new server takes the id the node would give it at its place (`DNSConfiguration.IdsOf`, the next free `dns-<n>`), and adding or removing goes through a `Servers` entry with the others.
 - The station has one `DNSDeviceModel` for both OCPP nodes now, so one request at a time holds across the versions.
 
 ### B.13 Decisions
 
-Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS concept B.14), point 5 with the NTS paper on 2026-10-30, and point 3 by Achim on 2026-11-04. The others are open; the numbers stay, because the rest of this document refers to them.
+Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS concept B.14), point 5 with the NTS paper on 2026-10-30, and point 3 by Achim on 2026-11-04 (built on 2026-11-05). The others are open; the numbers stay, because the rest of this document refers to them.
+
+Still to be confirmed with point 3: under `IndependentRequests`, a new server's entries go as one change with the `Servers` entry that adds it (B.9), where NTS concept B.10 refuses a new client id and asks for `ACID`. The DNS paper had the exception for new servers since T2a, and keeps it.
 
 1. **Location of the bridge**: in ChargingStation first, then together with the NTS bridge into an adapter assembly (NTS concept B.1). Decide for both together.
 2. **Names** (settled): `DNSClientController` and `DNSServerController`, so that both extensions are named alike, as NTS concept B.14 point 2 asks: `NTPController`, `NTPClientGroupController` and `NTPClientController` there. The paper uses these names since 2026-10-29. WWCP_OCPP's placeholders `DNSCtrlr` and `DNSServerCtrlr` are replaced (B.3 point 1). The alternative was the OCPP-customary `…Ctrlr` of the standard components, which this concept had recommended.
-3. **Slots or ids** (settled on 2026-11-04: **ids**, as for NTS). Not built yet: the slots of B.5, B.8 and B.9 are what the bridge does until then. Before: slots `1…16` are chosen because a standard CSMS can then add a server. NTS has since chosen the `id` field (NTS concept B.4 point 3, B.14 point 4) and ruled out positions for its servers, because they shift when a server is removed. The node gets the mechanism anyway, so `dns.servers[]` could carry slot numbers as ids; compacting would go away, and slots would stay stable across requests.
+3. **Slots or ids** (settled on 2026-11-04: **ids**, as for NTS). *Done on 2026-11-05*:
+   - **The node**: `dns.servers[].id` (B.4 point 9), read by `DNSConfiguration` with the syntax and `IdsOf` of the time servers, `dns-<n>` where the file gives none, and refused twice in one list. `GET /api/v1/configuration/dns` names every server with its id, `DNSServerIds` says them, the change line says `server ids = …` where they change, and a learned pin keeps the file's ids. "servers": null gives back servers without ids.
+   - **The page** sends each server's id back, and shows it as the address field's tooltip.
+   - **WWCP_OCPP**: `IDNSControllerSource.ServerIds` and `ServerValue(Server, Variable)` replace `Slots`. `DNSServerController` is made for an id, and refused for one the source does not have; `NewInstance` makes a stand-in, as `NTPClientController.NewInstance` does. `DNSClientController.Servers` is read from the ids, and `Address` may no longer be empty.
+   - **The bridge** (B.5, B.8, B.9): `Servers` adds, removes and orders servers; a new server comes through `INewInstancesSource` and needs its `Address`. `IndependentRequests` keeps a new server's entries with the `Servers` entry that adds it, and `BASE` sets `DNSClientController` as one with the servers it adds. The table is a list by id, the ids go into the file with every change, and a refusal names `DNSServerController[<id>]`. `FollowDNSServers` keeps the components in step with every change.
+   - **OCPP 1.6** (B.12): places are the order of `Servers`, and a new server takes the next free id.
+   - **Paper** (SDNS §3.1.1–§3.1.3, §3.2, §3.3, §3.4, T2a, T14, T14a, T18), Whitepapers.
+   - **Tests**: 7 more in the node (`DNSConfigurationTests` 3 with 7 cases, `DNSChangeTests` 4) and the id of a learned pin in `NameServerPinningTests`; one page test; WWCP_OCPP's `DNSControllerTests` by ids, with one more for a stand-in; in the station 4 more `DNSDeviceModelWritingTests` and 3 rewritten for what slots did (an unused slot, a slot emptied, every address emptied), one more `DNSKeys16Tests`, and every other DNS test moved to ids.
+   - **24 mutations**, each red in exactly its tests:
+     - in the node: the ids not read; two servers of one id; a learned pin dropping the ids; new ids not told; the ids compared after the servers changed; no ids shown; no ids written;
+     - in WWCP_OCPP: `Servers` not read; a controller for a server that is not there;
+     - in the bridge: no stand-in; a stand-in for any id; a new server's entries apart from `Servers`; a new server without an address; a server taken away and set; the order not kept; an `Address` emptied; `Servers` naming none; the components not following; a refusal naming the place; 1.6 counting ids by place; no ids sent; the ids not compared; `BASE` setting a new server apart;
+     - on the page: the id not sent back.
+
+   Before: slots `1…16` are chosen because a standard CSMS can then add a server. NTS has since chosen the `id` field (NTS concept B.4 point 3, B.14 point 4) and ruled out positions for its servers, because they shift when a server is removed. The node gets the mechanism anyway, so `dns.servers[]` could carry slot numbers as ids; compacting would go away, and slots would stay stable across requests.
 4. **Transports over OCPP**: `UDP, TCP, TLS, HTTPS, HTTPS_GET`, as recommended here and now written into the paper (`bdfe66a`); to be confirmed. `HTTPS_JSON` only for diagnostics, `HTTPS_Binary` is the same as `HTTPS`, `HTTP*` only for tests. A server configured locally with another transport still reads back as it is.
 5. **Data type of pin lists** (settled): `string`, in both papers. NTS concept B.9 had `SequenceList`, which takes only values of the `valuesList`. Since 2026-10-30 the NTS paper and concept have comma separated strings for every list (NTS concept A.6, Whitepapers `4e5e43d`), as SDNS always had (A.6 point 10).
 6. **Scope of the pre-flight** (B.6): the CSMS hosts only, or the NTS-KE hosts of the legal group as well, and whether those block or only warn.
@@ -497,11 +518,12 @@ The shared steps are those of NTS concept B.15 and are built **once**. DNS is th
    | T11 | the node's `NameServerPinningTests.AChangeToWhatANameServerIsHeldToIsSaidAndCountsAtOnce` |
    | T12 | open: `EncryptedOnly` is B.4 point 6 |
    | T13 | the node's `NameServersAskedTests.ANameServerOnItsOwnIsAskedOverWhatItIsConfiguredFor` (over TCP, never over UDP); Hermod's client asks a server over its own transport only (`DNSClient.GetOrCreateTransportClient`) |
-   | T14 | `DNSDeviceModelWritingTests.EveryAddressEmptiedIsRefused`; `DNSTestCriteriaTests.EveryAddressEmptiedIsRefusedSwitchedOffToo` |
-   | T15 | WWCP_OCPP's `DNSControllerTests.TryCheck_SaysWhatThePaperAllows` (17 pins, timeouts and ports, `ValueOutOfRange`); a server beyond `MaxServers` has no slot to be set in |
+   | T14 | `DNSDeviceModelWritingTests.NoServerAtAllIsRefused`; `DNSTestCriteriaTests.NoServerAtAllIsRefusedSwitchedOffToo` |
+   | T14a | `DNSDeviceModelWritingTests.AServerKeepsItsIdWhenTheOneBeforeItIsTakenAway` |
+   | T15 | WWCP_OCPP's `DNSControllerTests.TryCheck_SaysWhatThePaperAllows` (17 pins, timeouts and ports, `ValueOutOfRange`); `Servers` with more than `MaxServers` ids in `DNSDeviceModelWritingTests.ServersSaysWhichThereAreAndInWhichOrder` |
    | T16 | `DNSEventsTests.AChangeOnThePageIsToldToEachVersionThatIsDialled`; `DNSEquivalenceTests`, where the log line names `web:root` |
    | T17 | `DNSEquivalenceTests.WhatTheFileCannotTakeIsChangedNowhere`; `DNSDeviceModelWritingTests.WhatCannotBeSavedIsAnInternalError` |
-   | T18 | WWCP_OCPP's `DNSControllerTests.GetBaseReport_ListsEverySlotWithItsCharacteristics_Test`; `DNSDeviceModelTests.TheOCPPNodeReadsTheStationsNameResolution` |
+   | T18 | WWCP_OCPP's `DNSControllerTests.GetBaseReport_ListsEveryServerWithItsCharacteristics_Test`; `DNSDeviceModelTests.TheOCPPNodeReadsTheStationsNameResolution`, with a server added on the page |
    | T19 | `DNSDeviceModelWritingTests.SwitchedOffWhileTheCSMSIsDialledByNameIsRefused`; `DNSKeys16Tests.SwitchedOffWhileTheCentralSystemIsDialledByNameIsRejected` |
    | T20 | `DNSEquivalenceTests.ANameServerTheCSMSWouldNotResolveThroughIsRefusedByEitherVersion`; `DNSDeviceModelWritingTests.AChangeThatCutsTheCSMSOffIsRefused` |
    | T21 | `DNSRootCertificatesTests.ARootTheNamesOfTheCSMSResolveThroughIsKept` |
