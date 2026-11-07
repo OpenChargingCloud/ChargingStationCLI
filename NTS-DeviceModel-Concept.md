@@ -57,7 +57,7 @@ Part A compares, Part B describes the missing glue code.
 | `DelayAsymmetry`, `DelayVarAsymmetry` | correction values | **not implemented**. *Per server since 2026-11-07*: `delayAsymmetryMs` and `delayVarAsymmetry`, as chrony's `offset` and `asymmetry` (Achim) |
 | `Priority` | Byte | ✔ identical; the bands are asked one after another until one meets the quorum |
 | `MinInterval`/`MaxInterval` | per client, random | per group, fixed (see A.2) |
-| `Preflight` | a packet sent in advance | **not implemented** |
+| `Preflight` | a packet sent in advance | **not implemented**. *Per group since 2026-11-07*: `preflightSeconds`, chrony's `presend` |
 | `ErrorLogging` (per client) | security log | **per group only** |
 | `NTSKEServerURL`/`Port` | optional | only `ntsKEPort` per server |
 | `RootCAs` | the name of a root CA group | **no groups per server.** Instead there are node-wide TLS roots with usage `nts` and **pins per server**: `certificates[]` and `roots[]` as SHA-256 fingerprints (≤ 16 each), plus `onMismatch` (refuse/record/accept) and `trustOnFirstUse`. As decided on 2026-10-20, the pins cover root CAs per group. |
@@ -324,7 +324,7 @@ A standard CSMS knows only `ClockCtrlr`. The bridge fills it from the legal grou
 | `ErrorLogging` | integer 1…65535 | rw | `errorLogging` | |
 | `MaxErrors` | integer 1…65535 | rw | `maxErrors` | |
 | `MinInterval`, `MaxInterval` | integer s, 10…86400 | rw | `checkEverySeconds` | Moved from the client to the group (STS 3.2.3). As long as the node does not spread randomly, both read as `checkEverySeconds`, and only the same value for both is accepted, in one ACID request; unequal values ⇒ `Rejected` |
-| `Preflight` | integer s | n/a | not implemented | moved from the client to the group; not in the report ⇒ `UnknownVariable` |
+| `Preflight` | integer s, 1…86400 | rw (since 2026-11-07) | `preflightSeconds` (false = never) | moved from the client to the group. "" where there is none, and "" takes it away. A round begun this long after the last one sends each server its NTS query a first time and ignores the answer. Not the pre-flight check of name resolution (B.13 point 6) |
 | `Timeout` *(new)* | decimal s, 0.1…3600 | rw | `timeoutSeconds` | |
 | `LegalTimeAuthority` *(new, legal only)* | string[80] | rw | `legalTimeAuthority` | An empty string ⇒ removed (`RemovesLegalTimeAuthority`) |
 | `LegalTimeTolerance` *(new, legal only)* | decimal s, 0.001…60 | rw | `legalTimeToleranceSeconds` | |
@@ -478,7 +478,8 @@ The same pattern applies to the keys from STS §3.3, once WWCP_OCPP can register
   - Servers beyond the end are taken away.
 - **One interval.** `minInterval` and `maxInterval` each set the node's one interval, because 1.6 cannot set both at once.
 - **Mode.** `mode` takes `NTSv4` alone.
-- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are preflight, `ntske.<g>.servers`, `signedResponses` and `ntp.reboot.*`.
+- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are `ntske.<g>.servers`, `signedResponses` and `ntp.reboot.*`.
+- **The preflight.** `ntp.<g>.preflight` came on 2026-11-07: the group's `Preflight`, "" for none.
 - **The asymmetries.** `ntp.<g>.delayAsym` and `delayVarAsym` came on 2026-11-07, lists per server like the others, "0" where nothing is corrected.
 - **The refresh.** `ntske.<g>.minRefresh` and `maxRefresh` came on 2026-11-07. They are lists per server in seconds, reading 43200 and 86400 where nothing sets another, the last value holding for the rest. A `maxRefresh` before a server's `minRefresh` is `Rejected`, as in 2.1.
 - **AEAD.** `ntske.<g>.aead` came with B.4 point 5 (2026-11-05). It is a list like the others except for an empty entry, which is a server that offers every algorithm, not the one before it. A server whose entry names none reads as `AEADAlgorithm` does: the algorithm agreed on, or "".
