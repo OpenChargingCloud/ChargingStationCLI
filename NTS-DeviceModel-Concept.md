@@ -54,7 +54,7 @@ Part A compares, Part B describes the missing glue code.
 | `ServerURL` (URL) | the NTP server; NTS-KE optionally through `NTSKEServerURL` | `hostname` (DomainName, ≤ 253) **is the NTS-KE server**. There is no separate NTS-KE host. |
 | `ServerPort` | default `""` | `ntpPort`, default 123 |
 | `Mode` | NTPv4 / NTSv4 / NTPv4TLS | **NTSv4 only**. No plain NTP, no NTP over TLS (SMGW). |
-| `DelayAsymmetry`, `DelayVarAsymmetry` | correction values | **not implemented** |
+| `DelayAsymmetry`, `DelayVarAsymmetry` | correction values | **not implemented**. *Per server since 2026-11-07*: `delayAsymmetryMs` and `delayVarAsymmetry`, as chrony's `offset` and `asymmetry` (Achim) |
 | `Priority` | Byte | ✔ identical; the bands are asked one after another until one meets the quorum |
 | `MinInterval`/`MaxInterval` | per client, random | per group, fixed (see A.2) |
 | `Preflight` | a packet sent in advance | **not implemented** |
@@ -357,7 +357,9 @@ The "legal only" variables exist **only** in the instance `legal`. In any other 
 | `AEADAlgorithm` | OptionList `AES-SIV-CMAC-256,AES-128-GCM-SIV` | rw (since B.4 point 5) | `aead` / negotiated | "" offers both, the server choosing, and reads the negotiated one |
 | `Cookies`, `LastKeyExchange`, `Certificate`, `Judgement` | various | ro | state per host name | like `timeSources[]` in the API |
 | `MinRefresh`/`MaxRefresh` | integer s, 60…5184000 | rw (since 2026-11-07) | `servers[i].minRefreshSeconds`/`maxRefreshSeconds` | 43200/86400 where the entry sets none (Achim, 2026-11-07); by host name across every group, as `AEADAlgorithm`; a `MaxRefresh` before the `MinRefresh` ⇒ `Rejected` |
-| `DelayAsymmetry`, `DelayVarAsymmetry`, `NoCertTimeCheckAfterReboot`, `SignedResponses` | n/a | n/a | not implemented | not in the report ⇒ `UnknownVariable`; report them only once the node supports them. `Preflight` and `ErrorLogging` are variables of the group now (B.8). |
+| `DelayAsymmetry` | decimal ms, −1000…1000 | rw (since 2026-11-07) | `servers[i].delayAsymmetryMs` | added to every offset measured with the server, chrony's `offset`; "0" where unset, and "" or 0 unsets |
+| `DelayVarAsymmetry` | decimal, −0.5…0.5 | rw (since 2026-11-07) | `servers[i].delayVarAsymmetry` | chrony's `asymmetry` (Achim, 2026-11-07): the offset is corrected by it times the delay beyond the shortest of the server's last 16; "0" where unset. Both by host name across every group, the first entry setting either deciding |
+| `NoCertTimeCheckAfterReboot`, `SignedResponses` | n/a | n/a | not implemented | not in the report ⇒ `UnknownVariable`; report them only once the node supports them. `Preflight` and `ErrorLogging` are variables of the group now (B.8). |
 
 ### B.10 Writing: OCPP → node
 
@@ -476,7 +478,8 @@ The same pattern applies to the keys from STS §3.3, once WWCP_OCPP can register
   - Servers beyond the end are taken away.
 - **One interval.** `minInterval` and `maxInterval` each set the node's one interval, because 1.6 cannot set both at once.
 - **Mode.** `mode` takes `NTSv4` alone.
-- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are the delay asymmetries, preflight, `ntske.<g>.servers`, `signedResponses` and `ntp.reboot.*`.
+- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are preflight, `ntske.<g>.servers`, `signedResponses` and `ntp.reboot.*`.
+- **The asymmetries.** `ntp.<g>.delayAsym` and `delayVarAsym` came on 2026-11-07, lists per server like the others, "0" where nothing is corrected.
 - **The refresh.** `ntske.<g>.minRefresh` and `maxRefresh` came on 2026-11-07. They are lists per server in seconds, reading 43200 and 86400 where nothing sets another, the last value holding for the rest. A `maxRefresh` before a server's `minRefresh` is `Rejected`, as in 2.1.
 - **AEAD.** `ntske.<g>.aead` came with B.4 point 5 (2026-11-05). It is a list like the others except for an empty entry, which is a server that offers every algorithm, not the one before it. A server whose entry names none reads as `AEADAlgorithm` does: the algorithm agreed on, or "".
 - **The threshold.** `ntp.timeAdjustmentReportingThreshold` came with B.4 point 6 (2026-11-03). It is `ClockCtrlr.TimeAdjustmentReportingThreshold` and so the legal group's, listed where there is a legal group. It reads "5" by default and "" for never, and an empty value switches the report off.

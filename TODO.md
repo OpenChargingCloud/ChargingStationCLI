@@ -12,8 +12,6 @@ and in the Secure Time Sync paper, §3.2.3, §3.2.4 and §3.3.
 
 - **`NTSKEServerURL`**: a key exchange server separate from the NTP server.
   Today the node does the key exchange with the host named in `ServerURL`.
-- **`DelayAsymmetry` / `DelayVarAsymmetry`**: a known asymmetry of the path
-  to the server, and its variance.
 - **`SignedResponses`**: asking for digitally signed NTS responses.
 - **`Preflight`**: checking a server before it is used. It belongs to the
   group (`NTPClientGroupController`, concept B.8, paper §3.2.3).
