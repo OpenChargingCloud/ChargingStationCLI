@@ -2,12 +2,4 @@
 
 Work that was decided to come later. Each entry says where its details are.
 
-## NTS: the variables `NTPClientController` still leaves out
-
-The OCPP 2.x component `NTPClientController[<id>]` (one per time server) does
-not report these variables yet, so a CSMS reads them as unknown. The 1.6 keys
-that stand for them are missing as well. Details are in
-[NTS-DeviceModel-Concept.md](NTS-DeviceModel-Concept.md), tables B.9 and B.13,
-and in the Secure Time Sync paper, §3.2.3, §3.2.4 and §3.3.
-
-- **`SignedResponses`**: asking for digitally signed NTS responses.
+Nothing is open at the moment. The NTS variables this file listed - `NTSKEServerURL`, `MinRefresh`/`MaxRefresh`, `DelayAsymmetry`/`DelayVarAsymmetry`, `SignedResponses` and the group's `Preflight` - came on 2026-11-07; see [NTS-DeviceModel-Concept.md](NTS-DeviceModel-Concept.md), tables B.8, B.9 and B.13.

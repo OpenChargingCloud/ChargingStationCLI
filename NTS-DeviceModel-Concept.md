@@ -64,7 +64,7 @@ Part A compares, Part B describes the missing glue code.
 | `NoCertTimeCheckAfterReboot` | Boolean | **not implemented** |
 | `MinRefresh`/`MaxRefresh` | seconds in v2.x, **days** in v1.6 (30/60) | a fixed **30 minutes** (`Norn MonitoringConfig.NTSKERefreshInterval`), plus a cookie pool that is renewed when exhausted. *Per server since 2026-11-07*: `minRefreshSeconds`/`maxRefreshSeconds`, 43200/86400 where unset |
 | `AEADAlgorithm` | selectable | Norn offers both (`OfferedAEADAlgorithms`), but the node does **not make it configurable**; only the negotiated algorithm can be read. *Configurable per server since B.4 point 5 (2026-11-05)*: `aead`, and unset offers both |
-| `SignedResponses` | Boolean | Norn has the extensions (0xff00–0xff02) and `QueryTime(RequestSignedResponse…)`, but the **node never requests them** |
+| `SignedResponses` | Boolean | Norn has the extensions (0xff00–0xff02) and `QueryTime(RequestSignedResponse…)`, but the **node never requests them**. *Per server since 2026-11-07*: `signedResponses`, every signed response into the metrological log (Achim) |
 | (none) | missing | `enabled` per server |
 | (none) | missing | pins, `onMismatch`, `trustOnFirstUse` (see above) |
 
@@ -359,7 +359,8 @@ The "legal only" variables exist **only** in the instance `legal`. In any other 
 | `MinRefresh`/`MaxRefresh` | integer s, 60…5184000 | rw (since 2026-11-07) | `servers[i].minRefreshSeconds`/`maxRefreshSeconds` | 43200/86400 where the entry sets none (Achim, 2026-11-07); by host name across every group, as `AEADAlgorithm`; a `MaxRefresh` before the `MinRefresh` ⇒ `Rejected` |
 | `DelayAsymmetry` | decimal ms, −1000…1000 | rw (since 2026-11-07) | `servers[i].delayAsymmetryMs` | added to every offset measured with the server, chrony's `offset`; "0" where unset, and "" or 0 unsets |
 | `DelayVarAsymmetry` | decimal, −0.5…0.5 | rw (since 2026-11-07) | `servers[i].delayVarAsymmetry` | chrony's `asymmetry` (Achim, 2026-11-07): the offset is corrected by it times the delay beyond the shortest of the server's last 16; "0" where unset. Both by host name across every group, the first entry setting either deciding |
-| `NoCertTimeCheckAfterReboot`, `SignedResponses` | n/a | n/a | not implemented | not in the report ⇒ `UnknownVariable`; report them only once the node supports them. `Preflight` and `ErrorLogging` are variables of the group now (B.8). |
+| `SignedResponses` | boolean | rw (since 2026-11-07) | `servers[i].signedResponses` | asked after every measurement as a second, scheduled response, so that the signing slows down nothing measured; the signature checked against the public keys the key exchange fetched, and every signed response written into the metrological log (Achim, 2026-11-07). A server is asked where any entry for it asks |
+| `NoCertTimeCheckAfterReboot` | n/a | n/a | not implemented | not in the report ⇒ `UnknownVariable`; report it only once the node supports it. `Preflight` and `ErrorLogging` are variables of the group now (B.8). |
 
 ### B.10 Writing: OCPP → node
 
@@ -478,7 +479,8 @@ The same pattern applies to the keys from STS §3.3, once WWCP_OCPP can register
   - Servers beyond the end are taken away.
 - **One interval.** `minInterval` and `maxInterval` each set the node's one interval, because 1.6 cannot set both at once.
 - **Mode.** `mode` takes `NTSv4` alone.
-- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are `signedResponses` and `ntp.reboot.*`.
+- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are `ntp.reboot.*`.
+- **Signed responses.** `ntp.<g>.signedResponses` came on 2026-11-07. It is the group's, where 2.1 has each server's `SignedResponses`: `true` where every server is asked, and set on every server.
 - **The key exchange servers.** `ntske.<g>.servers` came on 2026-11-07. It is a list like `aead`: an empty entry is a server that is its own key exchange server.
 - **The preflight.** `ntp.<g>.preflight` came on 2026-11-07: the group's `Preflight`, "" for none.
 - **The asymmetries.** `ntp.<g>.delayAsym` and `delayVarAsym` came on 2026-11-07, lists per server like the others, "0" where nothing is corrected.
