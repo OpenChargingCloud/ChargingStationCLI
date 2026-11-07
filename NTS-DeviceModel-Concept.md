@@ -62,7 +62,7 @@ Part A compares, Part B describes the missing glue code.
 | `NTSKEServerURL`/`Port` | optional | only `ntsKEPort` per server |
 | `RootCAs` | the name of a root CA group | **no groups per server.** Instead there are node-wide TLS roots with usage `nts` and **pins per server**: `certificates[]` and `roots[]` as SHA-256 fingerprints (≤ 16 each), plus `onMismatch` (refuse/record/accept) and `trustOnFirstUse`. As decided on 2026-10-20, the pins cover root CAs per group. |
 | `NoCertTimeCheckAfterReboot` | Boolean | **not implemented** |
-| `MinRefresh`/`MaxRefresh` | seconds in v2.x, **days** in v1.6 (30/60) | a fixed **30 minutes** (`Norn MonitoringConfig.NTSKERefreshInterval`), plus a cookie pool that is renewed when exhausted |
+| `MinRefresh`/`MaxRefresh` | seconds in v2.x, **days** in v1.6 (30/60) | a fixed **30 minutes** (`Norn MonitoringConfig.NTSKERefreshInterval`), plus a cookie pool that is renewed when exhausted. *Per server since 2026-11-07*: `minRefreshSeconds`/`maxRefreshSeconds`, 43200/86400 where unset |
 | `AEADAlgorithm` | selectable | Norn offers both (`OfferedAEADAlgorithms`), but the node does **not make it configurable**; only the negotiated algorithm can be read. *Configurable per server since B.4 point 5 (2026-11-05)*: `aead`, and unset offers both |
 | `SignedResponses` | Boolean | Norn has the extensions (0xff00–0xff02) and `QueryTime(RequestSignedResponse…)`, but the **node never requests them** |
 | (none) | missing | `enabled` per server |
@@ -356,7 +356,7 @@ The "legal only" variables exist **only** in the instance `legal`. In any other 
 | `TrustOnFirstUse` *(new)* | OptionList `None,Root,Certificate` | rw | `trustOnFirstUse` | |
 | `AEADAlgorithm` | OptionList `AES-SIV-CMAC-256,AES-128-GCM-SIV` | rw (since B.4 point 5) | `aead` / negotiated | "" offers both, the server choosing, and reads the negotiated one |
 | `Cookies`, `LastKeyExchange`, `Certificate`, `Judgement` | various | ro | state per host name | like `timeSources[]` in the API |
-| `MinRefresh`/`MaxRefresh` | integer s | ro (1800) | Norn `NTSKERefreshInterval` | rw only once the node makes it configurable; the paper's defaults are now 43200/86400 |
+| `MinRefresh`/`MaxRefresh` | integer s, 60…5184000 | rw (since 2026-11-07) | `servers[i].minRefreshSeconds`/`maxRefreshSeconds` | 43200/86400 where the entry sets none (Achim, 2026-11-07); by host name across every group, as `AEADAlgorithm`; a `MaxRefresh` before the `MinRefresh` ⇒ `Rejected` |
 | `DelayAsymmetry`, `DelayVarAsymmetry`, `NoCertTimeCheckAfterReboot`, `SignedResponses` | n/a | n/a | not implemented | not in the report ⇒ `UnknownVariable`; report them only once the node supports them. `Preflight` and `ErrorLogging` are variables of the group now (B.8). |
 
 ### B.10 Writing: OCPP → node
@@ -476,7 +476,8 @@ The same pattern applies to the keys from STS §3.3, once WWCP_OCPP can register
   - Servers beyond the end are taken away.
 - **One interval.** `minInterval` and `maxInterval` each set the node's one interval, because 1.6 cannot set both at once.
 - **Mode.** `mode` takes `NTSv4` alone.
-- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are the delay asymmetries, preflight, `ntske.<g>.servers`, the cookie refresh, `signedResponses` and `ntp.reboot.*`.
+- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are the delay asymmetries, preflight, `ntske.<g>.servers`, `signedResponses` and `ntp.reboot.*`.
+- **The refresh.** `ntske.<g>.minRefresh` and `maxRefresh` came on 2026-11-07. They are lists per server in seconds, reading 43200 and 86400 where nothing sets another, the last value holding for the rest. A `maxRefresh` before a server's `minRefresh` is `Rejected`, as in 2.1.
 - **AEAD.** `ntske.<g>.aead` came with B.4 point 5 (2026-11-05). It is a list like the others except for an empty entry, which is a server that offers every algorithm, not the one before it. A server whose entry names none reads as `AEADAlgorithm` does: the algorithm agreed on, or "".
 - **The threshold.** `ntp.timeAdjustmentReportingThreshold` came with B.4 point 6 (2026-11-03). It is `ClockCtrlr.TimeAdjustmentReportingThreshold` and so the legal group's, listed where there is a legal group. It reads "5" by default and "" for never, and an empty value switches the report off.
 

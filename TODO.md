@@ -12,9 +12,6 @@ and in the Secure Time Sync paper, §3.2.3, §3.2.4 and §3.3.
 
 - **`NTSKEServerURL`**: a key exchange server separate from the NTP server.
   Today the node does the key exchange with the host named in `ServerURL`.
-- **`MinRefresh` / `MaxRefresh`**: when the cookies are renewed by a new key
-  exchange. Norn has `NTSKERefreshInterval`, but the node does not make it
-  configurable. The paper's defaults are 43200 and 86400 s.
 - **`DelayAsymmetry` / `DelayVarAsymmetry`**: a known asymmetry of the path
   to the server, and its variance.
 - **`SignedResponses`**: asking for digitally signed NTS responses.
