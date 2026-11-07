@@ -10,6 +10,4 @@ that stand for them are missing as well. Details are in
 [NTS-DeviceModel-Concept.md](NTS-DeviceModel-Concept.md), tables B.9 and B.13,
 and in the Secure Time Sync paper, §3.2.3, §3.2.4 and §3.3.
 
-- **`NTSKEServerURL`**: a key exchange server separate from the NTP server.
-  Today the node does the key exchange with the host named in `ServerURL`.
 - **`SignedResponses`**: asking for digitally signed NTS responses.

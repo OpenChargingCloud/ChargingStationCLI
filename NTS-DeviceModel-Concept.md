@@ -59,7 +59,7 @@ Part A compares, Part B describes the missing glue code.
 | `MinInterval`/`MaxInterval` | per client, random | per group, fixed (see A.2) |
 | `Preflight` | a packet sent in advance | **not implemented**. *Per group since 2026-11-07*: `preflightSeconds`, chrony's `presend` |
 | `ErrorLogging` (per client) | security log | **per group only** |
-| `NTSKEServerURL`/`Port` | optional | only `ntsKEPort` per server |
+| `NTSKEServerURL`/`Port` | optional | only `ntsKEPort` per server. *Per server since 2026-11-07*: `ntsKEHostname` |
 | `RootCAs` | the name of a root CA group | **no groups per server.** Instead there are node-wide TLS roots with usage `nts` and **pins per server**: `certificates[]` and `roots[]` as SHA-256 fingerprints (≤ 16 each), plus `onMismatch` (refuse/record/accept) and `trustOnFirstUse`. As decided on 2026-10-20, the pins cover root CAs per group. |
 | `NoCertTimeCheckAfterReboot` | Boolean | **not implemented** |
 | `MinRefresh`/`MaxRefresh` | seconds in v2.x, **days** in v1.6 (30/60) | a fixed **30 minutes** (`Norn MonitoringConfig.NTSKERefreshInterval`), plus a cookie pool that is renewed when exhausted. *Per server since 2026-11-07*: `minRefreshSeconds`/`maxRefreshSeconds`, 43200/86400 where unset |
@@ -345,7 +345,7 @@ The "legal only" variables exist **only** in the instance `legal`. In any other 
 | `Enabled` | boolean | rw | `servers[i].enabled` | |
 | `ServerURL` | string[253] | rw | `servers[i].hostname` | A host name is the **NTS-KE server**. `nts://host[:port]` is accepted as well (the port ⇒ `NTSKEServerPort`). |
 | `ServerPort` | integer 1…65535 | rw | `ntpPort` | default 123 |
-| `NTSKEServerURL` | string | ro | = `ServerURL` | a separate KE host ⇒ `Rejected` until the node supports it |
+| `NTSKEServerURL` | string[253] | rw (since 2026-11-07) | `servers[i].ntsKEHostname` | "" where the server is its own key exchange server; "" or the server itself unsets, and `nts://host[:port]` sets the port as well. The request asks for `ServerURL` as the NTP server (NTPv4 Server Negotiation). By host name across every group, as `AEADAlgorithm` |
 | `NTSKEServerPort` | integer | rw | `ntsKEPort` | default 4460 |
 | `Mode` | OptionList `NTSv4` | ro | n/a | other values ⇒ `Rejected` |
 | `Priority` | integer 0…255 | rw | `priority` | |
@@ -478,7 +478,8 @@ The same pattern applies to the keys from STS §3.3, once WWCP_OCPP can register
   - Servers beyond the end are taken away.
 - **One interval.** `minInterval` and `maxInterval` each set the node's one interval, because 1.6 cannot set both at once.
 - **Mode.** `mode` takes `NTSv4` alone.
-- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are `ntske.<g>.servers`, `signedResponses` and `ntp.reboot.*`.
+- **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are `signedResponses` and `ntp.reboot.*`.
+- **The key exchange servers.** `ntske.<g>.servers` came on 2026-11-07. It is a list like `aead`: an empty entry is a server that is its own key exchange server.
 - **The preflight.** `ntp.<g>.preflight` came on 2026-11-07: the group's `Preflight`, "" for none.
 - **The asymmetries.** `ntp.<g>.delayAsym` and `delayVarAsym` came on 2026-11-07, lists per server like the others, "0" where nothing is corrected.
 - **The refresh.** `ntske.<g>.minRefresh` and `maxRefresh` came on 2026-11-07. They are lists per server in seconds, reading 43200 and 86400 where nothing sets another, the last value holding for the rest. A `maxRefresh` before a server's `minRefresh` is `Rejected`, as in 2.1.
