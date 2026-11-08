@@ -189,6 +189,21 @@ jobs:
         timeout-minutes: 10
         run: dotnet test libs/WWCP_Node/WWCP_Node_Tests/WWCP_Node_Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --logger "trx;LogFileName=node-${{ matrix.leg }}.trx" --results-directory artifacts
 
+      # The bridge between the node and OCPP: WWCP_OCPP_Node, which shows the
+      # node's time servers and name servers to a CSMS as the components and
+      # variables of OCPP 2.1 and the configuration keys of OCPP 1.6, and
+      # writes back what a CSMS sets there. The station's NTS and DNS
+      # controllers are this bridge. WWCP_OCPP has no workflow of its own, and
+      # nightly.yml runs these tests only by night, with the whole solution;
+      # this runs them on every push, against the node pinned here and before
+      # the station that stands on them.
+      #
+      # A hang names its test and leaves a minidump, as in the station's step:
+      # the longest test takes a few seconds.
+      - name: Test the bridge between the node and OCPP
+        timeout-minutes: 10
+        run: dotnet test libs/WWCP_OCPP/WWCP_OCPP_Node_Tests/WWCP_OCPP_Node_Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --logger "trx;LogFileName=bridge-${{ matrix.leg }}.trx" --results-directory artifacts --blame-hang-timeout 2m --blame-hang-dump-type mini
+
       # The station's own tests. Nowhere else runs them — libs/ChargingStation
       # has no workflow of its own, by design: it is not built alone, it is
       # built here.
