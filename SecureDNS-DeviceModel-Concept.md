@@ -404,7 +404,7 @@ Limits: one key per request, so there is no exception for new servers. With the 
 
 ### B.13 Decisions
 
-Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS concept B.14), point 5 with the NTS paper on 2026-10-30, point 3 by Achim on 2026-11-04 (built on 2026-11-05), point 9 by Achim on 2026-11-05 (built the same day), points 4 and 6 by Achim on 2026-11-05, and point 1 by Achim on 2026-11-05 (built the same day). The others are open; the numbers stay, because the rest of this document refers to them.
+Points 2 and 7 were settled on 2026-10-29, together with the NTS decisions (NTS concept B.14), point 5 with the NTS paper on 2026-10-30, point 3 by Achim on 2026-11-04 (built on 2026-11-05), point 9 by Achim on 2026-11-05 (built the same day), points 4 and 6 by Achim on 2026-11-05, point 1 by Achim on 2026-11-05 (built the same day), and point 8 by Achim on 2026-11-05 (built the same day). None is open any more; the numbers stay, because the rest of this document refers to them.
 
 Settled with point 3 on 2026-11-05: under `IndependentRequests`, a new server is refused and `ACID` or `BASE` is asked for, as NTS concept B.10 does for a new client (B.9).
 
