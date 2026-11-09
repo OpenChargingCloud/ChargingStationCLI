@@ -142,9 +142,17 @@ jobs:
       # the logger then names each test project's file after the second it
       # began, where one file name was overwritten by every project after the
       # first and what was uploaded was whichever finished last.
+      #
+      # A test host that dies is dumped as it dies, a minidump as well, beside
+      # the Sequence file. On 2026-11-04 Hermod's test host died once in four
+      # full runs on a loaded Windows machine, during
+      # Generate_RSA_ServerCertificate_Direct_Test, with no stack and no reason
+      # after "crashed"; it did not come back alone or in the whole suite
+      # again. The test named is only the one that was running, so the next
+      # time the dump is all there is to go on.
       - name: Test everything, as pinned
         timeout-minutes: 120
-        run: dotnet test ChargingStationCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --logger "console;verbosity=normal" --logger "trx;LogFilePrefix=${{ matrix.leg }}" --results-directory artifacts --blame-hang-timeout 10m --blame-hang-dump-type mini
+        run: dotnet test ChargingStationCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --logger "console;verbosity=normal" --logger "trx;LogFilePrefix=${{ matrix.leg }}" --results-directory artifacts --blame-hang-timeout 10m --blame-hang-dump-type mini --blame-crash --blame-crash-dump-type mini
 
       # The tests of WWCP_OCPP, which the solution does not hold: the station
       # builds two of WWCP_OCPP's libraries, not their tests, and no CI of
@@ -154,15 +162,16 @@ jobs:
       # with a phaseToUse and every SetNetworkProfile with an APN, and only
       # these tests said so. !cancelled(), so that a red suite above does
       # not keep them from running; both projects run, and either one red
-      # makes the step red.
+      # makes the step red. A hang is named after ten minutes and a crash
+      # dumped as it dies, as in the step above.
       - name: The OCPP tests, as pinned
         if: ${{ !cancelled() }}
         timeout-minutes: 30
         shell: bash
         run: |
           rc=0
-          dotnet test libs/WWCP_OCPP/WWCP_OCPPv1.6_Tests/WWCP_OCPPv1.6_Tests.csproj --configuration Release --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}-ocpp16.trx" --results-directory artifacts || rc=1
-          dotnet test libs/WWCP_OCPP/WWCP_OCPPv2.1_Tests/WWCP_OCPPv2.1_Tests.csproj --configuration Release --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}-ocpp21.trx" --results-directory artifacts || rc=1
+          dotnet test libs/WWCP_OCPP/WWCP_OCPPv1.6_Tests/WWCP_OCPPv1.6_Tests.csproj --configuration Release --blame-hang-timeout 10m --blame-hang-dump-type mini --blame-crash --blame-crash-dump-type mini --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}-ocpp16.trx" --results-directory artifacts || rc=1
+          dotnet test libs/WWCP_OCPP/WWCP_OCPPv2.1_Tests/WWCP_OCPPv2.1_Tests.csproj --configuration Release --blame-hang-timeout 10m --blame-hang-dump-type mini --blame-crash --blame-crash-dump-type mini --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}-ocpp21.trx" --results-directory artifacts || rc=1
           exit $rc
 
       # The same start as in ci.yml, for the same reason and on the same leg.
@@ -390,16 +399,18 @@ jobs:
         continue-on-error: true
         run: dotnet build ChargingStationCLI.slnx --configuration Release
 
-      # A hung test named after ten minutes, as in the pinned job, but without
-      # a dump: nothing here is uploaded.
+      # A hung test named after ten minutes and a crashed one as it dies, as in
+      # the pinned job. No hang dump: nothing here is uploaded. A crash is
+      # dumped all the same - --blame-crash knows no dump type "none" - and
+      # the dump stays on the runner.
       - name: Test against the tips (informational)
         if: steps.build.outcome == 'success'
         continue-on-error: true
         timeout-minutes: 120
-        run: dotnet test ChargingStationCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --logger "console;verbosity=normal" --blame-hang-timeout 10m --blame-hang-dump-type none
+        run: dotnet test ChargingStationCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --logger "console;verbosity=normal" --blame-hang-timeout 10m --blame-hang-dump-type none --blame-crash --blame-crash-dump-type mini
 
       # The OCPP tests as well, which the solution does not hold - see the
-      # pinned job.
+      # pinned job. Hang and crash as in the step above.
       - name: The OCPP tests against the tips (informational)
         if: steps.build.outcome == 'success'
         continue-on-error: true
@@ -407,8 +418,8 @@ jobs:
         shell: bash
         run: |
           rc=0
-          dotnet test libs/WWCP_OCPP/WWCP_OCPPv1.6_Tests/WWCP_OCPPv1.6_Tests.csproj --configuration Release --logger "console;verbosity=normal" || rc=1
-          dotnet test libs/WWCP_OCPP/WWCP_OCPPv2.1_Tests/WWCP_OCPPv2.1_Tests.csproj --configuration Release --logger "console;verbosity=normal" || rc=1
+          dotnet test libs/WWCP_OCPP/WWCP_OCPPv1.6_Tests/WWCP_OCPPv1.6_Tests.csproj --configuration Release --blame-hang-timeout 10m --blame-hang-dump-type none --blame-crash --blame-crash-dump-type mini --logger "console;verbosity=normal" || rc=1
+          dotnet test libs/WWCP_OCPP/WWCP_OCPPv2.1_Tests/WWCP_OCPPv2.1_Tests.csproj --configuration Release --blame-hang-timeout 10m --blame-hang-dump-type none --blame-crash --blame-crash-dump-type mini --logger "console;verbosity=normal" || rc=1
           exit $rc
 
       - name: Say how it went
