@@ -25,6 +25,7 @@ using org.GraphDefined.Vanaheimr.Hermod;
 using cloud.charging.open.ChargingStation.CommandLine;
 using cloud.charging.open.ChargingStation.ISO15118;
 
+using cloud.charging.open.protocols.OCPP.SSH;
 using cloud.charging.open.protocols.WWCP.Node;
 using cloud.charging.open.protocols.WWCP.Node.Certificates;
 using cloud.charging.open.protocols.WWCP.Node.CommandLine;
@@ -290,6 +291,15 @@ namespace cloud.charging.open.ChargingStation
 
             if (Station.CalibrationCertificates.Count > 0)
                 yield return ("calibration", String.Join(", ", Station.CalibrationCertificates.Select(certificate => certificate.Id)));
+
+            // Where commissioning over SSH is served: the URL on a line of its
+            // own, then the subsystem and who may - the host key a tool pins
+            // is the one under "SSH". Two lines, as the charging stations' of a
+            // CSMS, because the banner breaks no line of a kind's.
+            if (Station.CommissioningServed)
+                yield return ("commissioning", Station.CommissioningURL is String url
+                                                   ? $"{url}\nsubsystem {OCPPSshServer.OCPPSubsystem}, for {ChargingStation.CommissioningPermission}"
+                                                   : "switched on, but the SSH server is off:\nno tool can connect");
 
         }
 

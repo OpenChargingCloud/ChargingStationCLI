@@ -207,6 +207,33 @@ configuration file, or the checkbox on the SSH server page, switches it off for
 the next session, and ends the ones open; the command line is still served.
 
 
+### Commissioning over SSH
+
+A commissioning tool may speak OCPP 2.1 to the station on the same port, where
+`"commissioning": { "enabled": true }` in `configuration.json` or the switch on
+the **Commissioning** page says so - at once, without a restart; switched off,
+every tool connected is let go of. The banner then says where:
+
+```
+  commissioning  ssh://127.0.0.1:22348
+                 subsystem ocpp@open.charging.cloud, for commissioning:run
+```
+
+The tool signs in as an account with a key of its own, as at the prompt above,
+asks for the subsystem `ocpp@open.charging.cloud` and speaks `ocpp2.1` or
+`ocpp2.0.1` to the OCPP 2.1 node, `test02`. Only an account that may run
+`commissioning` gets it - the installer and the system administrator, unless
+the configuration file's roles say otherwise; for any other the subsystem is
+not there.
+
+The tool is a networking node of its own, named after its account - never the
+CSMS: a request it sends is for the station and is answered to it, and what the
+station sends the CSMS, and its answers to the CSMS, still go up the
+connections it dials. An account named like the CSMS or like the station, or a
+HELLO naming another node than the account, is refused. OCPP 1.6 is not served
+this way.
+
+
 ### The log
 
 Everything that happens is written three times over, because the three answer
