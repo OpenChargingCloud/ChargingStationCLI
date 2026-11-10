@@ -486,7 +486,8 @@ The same pattern applies to the keys from STS §3.3, once WWCP_OCPP can register
   - A new server at the end gets the last server's ports, priority, root group and pin rules, but none of its pins.
   - Servers beyond the end are taken away.
 - **One interval.** `minInterval` and `maxInterval` each set the node's one interval, because 1.6 cannot set both at once.
-- **Mode.** `mode` takes `NTSv4` alone. NTSv4SSH has no 1.6 key yet.
+- **Mode.** `mode` takes `NTSv4`, and since 2026-11-10 `NTSv4SSH`: a list per server, read as one value where every server has the same mode.
+- **SSH.** Since 2026-11-10, NTS over SSH §7.1: `ntske.<g>.sshPorts`, `sshUserNames` and `sshUseOCPPConnection` are lists per server, `ntske.<g>.sshHostKeyPins.n` and `sshHostCAs.n` the n-th server's, and `ntske.sshClientPublicKey` is the common, read-only key. A list changes only the servers it applies to in their mode (a key of SSH not those over TLS, a key of TLS not those over SSH, a connection of their own not those on the connection of OCPP), and is `Rejected` where it applies to none. A new server goes as the last one goes, with its CAs but none of its host key pins.
 - **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are `ntp.reboot.*`.
 - **Signed responses.** `ntp.<g>.signedResponses` came on 2026-11-07. It is the group's, where 2.1 has each server's `SignedResponses`: `true` where every server is asked, and set on every server.
 - **The key exchange servers.** `ntske.<g>.servers` came on 2026-11-07. It is a list like `aead`: an empty entry is a server that is its own key exchange server.
