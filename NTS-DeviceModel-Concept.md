@@ -53,7 +53,7 @@ Part A compares, Part B describes the missing glue code.
 | *Instance* | "NTP Client Identification" | no id of its own: servers are addressed by their **host name** within the group |
 | `ServerURL` (URL) | the NTP server; NTS-KE optionally through `NTSKEServerURL` | `hostname` (DomainName, ≤ 253) **is the NTS-KE server**. There is no separate NTS-KE host. |
 | `ServerPort` | default `""` | `ntpPort`, default 123 |
-| `Mode` | NTPv4 / NTSv4 / NTPv4TLS | **NTSv4 only**. No plain NTP, no NTP over TLS (SMGW). |
+| `Mode` | NTPv4 / NTSv4 / NTPv4TLS | **NTSv4 only**. No plain NTP, no NTP over TLS (SMGW). *Since 2026-11-10 also NTSv4SSH*, the fourth value of section 7 of the white paper "NTS Key Establishment over SSH": the key exchange over SSH (B.9). |
 | `DelayAsymmetry`, `DelayVarAsymmetry` | correction values | **not implemented**. *Per server since 2026-11-07*: `delayAsymmetryMs` and `delayVarAsymmetry`, as chrony's `offset` and `asymmetry` (Achim) |
 | `Priority` | Byte | ✔ identical; the bands are asked one after another until one meets the quorum |
 | `MinInterval`/`MaxInterval` | per client, random | per group, fixed (see A.2) |
@@ -347,7 +347,7 @@ The "legal only" variables exist **only** in the instance `legal`. In any other 
 | `ServerPort` | integer 1…65535 | rw | `ntpPort` | default 123 |
 | `NTSKEServerURL` | string[253] | rw (since 2026-11-07) | `servers[i].ntsKEHostname` | "" where the server is its own key exchange server; "" or the server itself unsets, and `nts://host[:port]` sets the port as well. The request asks for `ServerURL` as the NTP server (NTPv4 Server Negotiation). By host name across every group, as `AEADAlgorithm` |
 | `NTSKEServerPort` | integer | rw | `ntsKEPort` | default 4460 |
-| `Mode` | OptionList `NTSv4` | ro | n/a | other values ⇒ `Rejected` |
+| `Mode` | OptionList `NTSv4,NTSv4SSH` | rw (since 2026-11-10) | `servers[i].ssh` | `NTSv4SSH` where the entry has an `ssh` object: the key exchange over the SSH subsystem `ntske/1@open.charging.cloud` (white paper "NTS Key Establishment over SSH", section 7). Switched to it, the server loses what only TLS has - `ntsKEPort`, `ntsKEHostname`, its certificate and root pins, `rootGroup`, `trustOnFirstUse`; switched back, its `ssh` object. In a request, `Mode` is applied before the server's other variables, whatever their order. Other values ⇒ `Rejected` |
 | `Priority` | integer 0…255 | rw | `priority` | |
 | `RootCAs` | string[50] | rw | `rootGroup` (new) ⇒ `roots[]` | B.11 |
 | `CertificatePins` *(new)* | string, comma separated SHA-256 | rw | `certificates[]` | ≤ 16 |
@@ -360,6 +360,14 @@ The "legal only" variables exist **only** in the instance `legal`. In any other 
 | `DelayAsymmetry` | decimal ms, −1000…1000 | rw (since 2026-11-07) | `servers[i].delayAsymmetryMs` | added to every offset measured with the server, chrony's `offset`; "0" where unset, and "" or 0 unsets |
 | `DelayVarAsymmetry` | decimal, −0.5…0.5 | rw (since 2026-11-07) | `servers[i].delayVarAsymmetry` | chrony's `asymmetry` (Achim, 2026-11-07): the offset is corrected by it times the delay beyond the shortest of the server's last 16; "0" where unset. Both by host name across every group, the first entry setting either deciding |
 | `SignedResponses` | boolean | rw (since 2026-11-07) | `servers[i].signedResponses` | asked after every measurement as a second, scheduled response, so that the signing slows down nothing measured; the signature checked against the public keys the key exchange fetched, and every signed response written into the metrological log (Achim, 2026-11-07). A server is asked where any entry for it asks |
+| `SSHPort` | integer 1…65535 | rw (since 2026-11-10) | `servers[i].ssh.port` | 22 where unset. Outside `NTSv4SSH` ⇒ `Rejected` ("applies in the mode NTSv4SSH only"), unless the same request sets `Mode` |
+| `SSHUserName` | string[32] | rw (since 2026-11-10) | `servers[i].ssh.user` | `ntske` where unset |
+| `SSHHostKeyPins` | string, comma separated `SHA256:<base64>` | rw (since 2026-11-10) | `servers[i].ssh.hostKeyPins` | ≤ 16; fingerprints of the key, as `ssh-keygen -l` writes them, not of a certificate. A server held to no host key and no CA is refused |
+| `SSHHostCAs` | string, comma separated `SHA256:<base64>` | rw (since 2026-11-10) | `servers[i].ssh.hostCAs` | ≤ 4; SSH CAs whose host certificate for the server's name, valid now, is believed |
+| `OnPinMismatch` over SSH | as above | rw | `servers[i].ssh.onMismatch` | in `NTSv4SSH` it is what a host key that is none of them comes to; `TrustOnFirstUse` other than `None` ⇒ `Rejected` (nothing is learned on first use), and `CertificatePins`, `RootPins`, `RootCAs`, `NTSKEServerURL` other than "" and `NTSKEServerPort` ⇒ `Rejected` ("does not apply in the mode NTSv4SSH") |
+| `SSHClientPublicKey` | string | ro (since 2026-11-10) | `ssh/ntske_client_ed25519_key.pub` | the node's own key for its time servers' SSH servers, made at the first read, the same for every server; a CSMS enters it at the NTS-KE server before it switches a server to `NTSv4SSH` |
+| `SSHHostKeyFingerprint` | string | ro (since 2026-11-10) | `sshHostKey` | the host key the server showed last; `Problem` over SSH is a host key that was refused (`hostKeyJudgement`) |
+| `SSHUseOCPPConnection` | n/a | n/a | not implemented | `UnknownVariable`: the SSH client of OCPP does not hand out its connection for another channel yet |
 | `NoCertTimeCheckAfterReboot` | n/a | n/a | not implemented | not in the report ⇒ `UnknownVariable`; report it only once the node supports it. `Preflight` and `ErrorLogging` are variables of the group now (B.8). |
 
 ### B.10 Writing: OCPP → node
@@ -478,7 +486,7 @@ The same pattern applies to the keys from STS §3.3, once WWCP_OCPP can register
   - A new server at the end gets the last server's ports, priority, root group and pin rules, but none of its pins.
   - Servers beyond the end are taken away.
 - **One interval.** `minInterval` and `maxInterval` each set the node's one interval, because 1.6 cannot set both at once.
-- **Mode.** `mode` takes `NTSv4` alone.
+- **Mode.** `mode` takes `NTSv4` alone. NTSv4SSH has no 1.6 key yet.
 - **Left out.** Keys the node does not have are not listed, and a change of one is `NotSupported`. These are `ntp.reboot.*`.
 - **Signed responses.** `ntp.<g>.signedResponses` came on 2026-11-07. It is the group's, where 2.1 has each server's `SignedResponses`: `true` where every server is asked, and set on every server.
 - **The key exchange servers.** `ntske.<g>.servers` came on 2026-11-07. It is a list like `aead`: an empty entry is a server that is its own key exchange server.
