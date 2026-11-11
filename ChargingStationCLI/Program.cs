@@ -668,10 +668,6 @@ namespace cloud.charging.open.ChargingStation
             await using (station)
             {
 
-                // What somebody signed in over SSH gets: this program's own command
-                // line, with its commands beside the node's.
-                station.CommandLines = (terminal, caller) => new StationCLI(station, terminal, caller);
-
                 if (station.ImportCertificates(arguments, out _) is Int32 notImported)
                     return notImported;
 

@@ -106,6 +106,23 @@ ptbtime2.ptb.de answered, 625 ms altogether:
   +624 ms  The clock was not stepped: that is a different thing, with meter readings and certificates hanging off it, and not something a test does by surprise.
 ```
 
+`evses` says how each EVSE stands right now, as the **EVSEs** page and the
+display do: available, charging, reserved or out of service, and while a car is
+charging, at what power, since when, how it was started and whose customer it
+is. The power is what the EVSE's meter measures where one is read, and the
+display's ramp otherwise - and then the line says so, because a console is
+where somebody would take it for a measurement.
+
+```
+ChargingStation> evses
+A  charging at 11 kW of 22 kW, simulated - no meter is read, since 14:02 (0 min), RFID, Elektro Mobil GmbH
+B  available, up to 150 kW
+```
+
+The station's command line and its commands are the station library's
+(`CommandLine/` there), so every program that runs a charging station offers
+them, over SSH too, and they are tested with the station.
+
 The log keeps writing while you type, from whichever thread did the thing it is
 reporting, and your half-typed line survives it: the line is taken off the
 screen, the entry is written whole, and the line comes back with the cursor
