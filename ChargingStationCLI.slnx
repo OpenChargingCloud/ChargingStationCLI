@@ -3,6 +3,9 @@
     <Project Path="libs/ChargingStation/ChargingStation/ChargingStation.csproj" Id="9ec046e3-9442-4ac1-9936-9df4394ebd36" />
     <Project Path="libs/ChargingStation/ChargingStationTests/ChargingStationTests.csproj" Id="55941f4b-b031-4b26-8221-82bd0bd12db6" />
   </Folder>
+  <Folder Name="/Dependencies/ChargyCore/">
+    <Project Path="libs/ChargyCore.NET/ChargyCore/ChargyCore.csproj" />
+  </Folder>
   <Folder Name="/Dependencies/ISO15118/">
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_2/WWCP_ISO15118_2.csproj" />
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_20.AC/WWCP_ISO15118_20.AC.csproj" />
@@ -26,6 +29,7 @@
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_SharedCC/WWCP_ISO15118_SharedCC.csproj" />
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_SLAC/WWCP_ISO15118_SLAC.csproj" />
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_SLAC_Tests/WWCP_ISO15118_SLAC_Tests.csproj" />
+    <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_T1S/WWCP_ISO15118_T1S.csproj" />
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_V2GTP/WWCP_ISO15118_V2GTP.csproj" />
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_V2GTP_Tests/WWCP_ISO15118_V2GTP_Tests.csproj" />
     <Project Path="libs/WWCP_ISO15118/WWCP_ISO15118_XMLDSig/WWCP_ISO15118_XMLDSig.csproj" />
@@ -33,6 +37,7 @@
   <Folder Name="/Dependencies/OCPP/">
     <Project Path="libs/WWCP_OCPP/WWCP_OCPP_Common/WWCP_OCPP_Common.csproj" />
     <Project Path="libs/WWCP_OCPP/WWCP_OCPP_Node/WWCP_OCPP_Node.csproj" />
+    <Project Path="libs/WWCP_OCPP/WWCP_OCPP_Node_TestKit/WWCP_OCPP_Node_TestKit.csproj" />
     <Project Path="libs/WWCP_OCPP/WWCP_OCPP_Node_Tests/WWCP_OCPP_Node_Tests.csproj" />
   </Folder>
   <Folder Name="/Dependencies/OCPP/OCPPv1.6/">
@@ -58,10 +63,13 @@
     <Project Path="libs/Urdr/UrdrTests/UrdrTests.csproj" />
   </Folder>
   <Folder Name="/Dependencies/WWCP/">
+    <Project Path="libs/WWCP_Core/WWCP_Core/WWCP_Core.csproj" />
     <Project Path="libs/WWCP_Core/WWCP_CoreData/WWCP_CoreData.csproj" />
     <Project Path="libs/WWCP_Core/WWCP_Core_Tests/WWCP_Core_Tests.csproj" />
     <Project Path="libs/WWCP_Node/WWCP_Node/WWCP_Node.csproj" />
+    <Project Path="libs/WWCP_Node/WWCP_Node_TestKit/WWCP_Node_TestKit.csproj" />
     <Project Path="libs/WWCP_Node/WWCP_Node_Tests/WWCP_Node_Tests.csproj" />
+    <Project Path="libs/WWCP_POI/WWCP_POI2/WWCP_POI2.csproj" />
   </Folder>
   <Project Path="ChargingStationCLI/ChargingStationCLI.csproj" />
 </Solution>
