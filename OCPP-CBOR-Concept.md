@@ -2,7 +2,8 @@
 
 Status: 2026-11-12. The decisions of chapter 5 are taken. Built are steps 1 to 4 (WWCP_OCPP
 bd3b9077), step 5 (e3cc32b2), step 6 (03ed10e9), step 7 (WWCP_Core 011c651d, WWCP_OCPP
-f88c44d8) and step 8 (WWCP_OCPP c64f7b8d). Steps 9 and 10 are open.
+f88c44d8), step 8 (WWCP_OCPP c64f7b8d) and step 9 (ChargingStation 9f8c4d2). Step 10 is
+open.
 
 ## 1. Goal
 
@@ -304,7 +305,44 @@ Not part of step 8:
 - A frame shown this way is not the JSON the adapter works on where the two differ: a
   point in time is what CBOR has for it, not the text of the JSON form.
 
-### 3.6 Found on the way, not changed
+### 3.6 What step 9 built (ChargingStation)
+
+- **`encoding`.** A connection says how its OCPP messages are written: `"json"`, which it
+  is where it says nothing (decision 4), `"cbor"` or `"auto"`. It is a field of
+  `ConnectionEntry`, written where it is not `"json"`, and so of an endpoint in `peers.json`;
+  `ConnectionStore` takes it when a connection is added and keeps it where a change does not
+  say. OCPP 1.6 has no CBOR: a 1.6 connection that names `"cbor"` or `"auto"` is refused, and
+  one that becomes 1.6 says `"json"` again.
+- **What is offered.** `SubProtocolsOf` follows the connection: `ocpp2.1, ocpp2.0.1` for
+  JSON, `ocpp2.1cbor` alone for CBOR, `ocpp2.1cbor, ocpp2.1, ocpp2.0.1` for auto - in the
+  WebSocket handshake and over `ssh://` (decision 6). The dialling passed nothing so far
+  and left it to the node; it says it now.
+- **CBOR and nothing else.** A back end may take a handshake without agreeing on any of the
+  subprotocols it was offered (Hermod's WebSocket server does). A connection that says
+  `"cbor"` and came to no CBOR subprotocol is let go of before anything is said to it, is
+  `Refused` and not tried again - over a WebSocket and over SSH.
+- **What it came to.** The log says which subprotocol a connection that is not `"json"`
+  agreed on. `GET /api/v1/configuration/connections` says it under `subprotocolInUse`, and
+  the connections page shows a chip "CBOR" and has the field ("Messages as").
+- **Connection test.** It offers what the connection would, asks its Heartbeat as a CBOR
+  frame where the handshake came to CBOR, reads the answer from the binary frame and shows
+  every frame it receives as the JSON it stands for (`OCPP_CBORFrame.TryAsJSON`). Where a
+  connection says `"cbor"` and the back end did not agree, the test fails and says so. At the
+  command line `testconnection` tests a stored connection, with its encoding.
+- **README**: the paragraph "JSON or CBOR".
+- **Tests.** `DiallingOverCBORTests`: what is offered, agreed on and spoken for nothing,
+  `json`, `cbor` and `auto`, and the fallback of `auto` to JSON; a back end without CBOR
+  not kept; what is no encoding, and OCPP 1.6; a change that keeps what it does not say; the
+  connection test in JSON and in CBOR. `connections.test.ts`: the field and the chip.
+
+Not part of step 9:
+
+- `subprotocolInUse` is said of WebSocket connections alone; an `ssh://` connection says
+  what it agreed on in the log.
+- No test dials over `ssh://` with CBOR, and none against a real CSMS node (step 10).
+- The SSH server of the station (commissioning) offers `ocpp2.1, ocpp2.0.1` as before.
+
+### 3.7 Found on the way, not changed
 
 - `OCPP_JSONResponseErrorMessage` writes the overlay form (7 items) and reads the standard
   form (5 items) alone, so a response error in overlay mode is not read back - in JSON, and
