@@ -2,8 +2,8 @@
 
 Status: 2026-11-12. The decisions of chapter 5 are taken. Built are steps 1 to 4 (WWCP_OCPP
 bd3b9077), step 5 (e3cc32b2), step 6 (03ed10e9), step 7 (WWCP_Core 011c651d, WWCP_OCPP
-f88c44d8), step 8 (WWCP_OCPP c64f7b8d) and step 9 (ChargingStation 9f8c4d2). Step 10 is
-open.
+f88c44d8), step 8 (WWCP_OCPP c64f7b8d) step 9 (ChargingStation 9f8c4d2) and step 10 (WWCP_Core c76ffa5c,
+WWCP_OCPP 0652bd4b, ChargingStation 660c8dc). The plan is through.
 
 ## 1. Goal
 
@@ -245,7 +245,8 @@ protected header of section 4.1. Styx brings COSE; what was built is its use.
   verified behind both. `OverCBOR/SignedWithCOSETests.cs` runs the fixtures of signed
   messages and of signature policies with COSE, over JSON and over CBOR connections.
 
-Chosen here, and Achim's to confirm or change (they belong into the white paper):
+Chosen here, confirmed by Achim on 2026-11-12 and written into the white paper as its
+questions Q22 to Q26 (the second one replaces what decision 3 said of a gateway):
 
 1. **The signer's key travels as a COSE_Key** in the unprotected header, under the text
    label `OCPPSignerKey` - what `jwk` is to the JWS. COSE has no parameter of its own for a
@@ -342,7 +343,48 @@ Not part of step 9:
 - No test dials over `ssh://` with CBOR, and none against a real CSMS node (step 10).
 - The SSH server of the station (commissioning) offers `ocpp2.1, ocpp2.0.1` as before.
 
-### 3.7 Found on the way, not changed
+### 3.7 What step 10 built (WWCP_OCPP, ChargingStation)
+
+What the plan asked of the last step, and where it is tested:
+
+| Asked for                          | Tested by                                                            |
+|------------------------------------|----------------------------------------------------------------------|
+| Station against CSMS over CBOR     | `MessagesOverCBORTests` (OCPP nodes, every message both ways, step 5); `DiallingOverCBORTests` (the station program against a back end that speaks `ocpp2.1cbor`, step 9) |
+| The fallback to JSON               | `DiallingOverCBORTests`: `auto` against a back end without CBOR (step 9) |
+| Mixed forwarding                   | `ForwardingOverCBORTests`: CBOR below, above and on both sides of a local controller (step 6) |
+| SSH                                | new: `OCPPOverSSH_OverCBOR_Tests`, `DiallingOverSSHWithCBORTests`    |
+| Signed messages                    | `SignedWithCOSETests`, `COSESignatureTests`, and the signed fixtures over CBOR (steps 5 and 7) |
+| The station's suite                | run with every step since step 6                                     |
+
+New in this step:
+
+- **OCPP over SSH with CBOR** (WWCP_OCPP). The fixture of `OCPPOverSSHTests` takes the
+  encoding of its base, and `OCPPOverSSH_OverCBOR_Tests` runs it with charging stations
+  that offer `ocpp2.1cbor` alone when they sign in: boot and heartbeat, the CSMS asking the
+  station, binary messages both ways, a station coming back, an overlay station, a local
+  controller signing in as its station. Nothing had to be changed for it: the SSH
+  transports had the CBOR sending of step 3, and the adapter's edge is the same.
+- **The station over `ssh://` with CBOR** (ChargingStation). `DiallingOverSSHWithCBORTests`:
+  a back end over SSH that takes the subprotocols it is given; JSON where the connection
+  says nothing, CBOR in the binary messages of the subsystem for `cbor` and `auto`, JSON for
+  `auto` where the server has no CBOR; a server without CBOR not spoken to by a `cbor`
+  connection; the connection test over SSH asking its Heartbeat the way the connection speaks.
+
+- **Without a time window, for COSE as for the JWS** (WWCP_Core). A verification rule may be
+  without a time window (WWCP_Core 018bc064, of another piece of work); since step 7 the time
+  window is checked by the code both signatures share. `VerificationWithoutTimeWindowTests`
+  is a fixture for each format now.
+
+Not tested, and said so:
+
+- The station program against a real CSMS node over CBOR in one test: the station's tests
+  have no CSMS node to start (they reference the charging station's side of WWCP_OCPP), so
+  the two halves are tested apart - node against node in WWCP_OCPP, the program against a
+  back end that reads and writes the CBOR of the messages' classes.
+- A commissioning tool speaking CBOR to the station's own SSH server: that server offers
+  `ocpp2.1, ocpp2.0.1`.
+
+### 3.8 Found on the way, not changed
 
 - `OCPP_JSONResponseErrorMessage` writes the overlay form (7 items) and reads the standard
   form (5 items) alone, so a response error in overlay mode is not read back - in JSON, and
