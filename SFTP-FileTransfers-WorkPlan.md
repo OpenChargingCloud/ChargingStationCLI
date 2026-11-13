@@ -1,8 +1,8 @@
 # SFTP for Logfile Uploads and Firmware Downloads - Work Plan
 
-**Status:** 2026-11-13. Step 1 (Hermod, pull request #255), the first part of step 2 (WWCP_Node) and the OCPP 2.1 part of step 3 (WWCP_OCPP) are built and pushed as branches; nothing is on a master branch, and nothing is pinned here.
+**Status:** 2026-11-13. Steps 1 to 3 are built and on the master branches (Hermod, WWCP_Node, WWCP_OCPP), and so is the enrolment of a key over OCPP at the station; nothing is pinned here yet. Steps 4 to 10 are plan, apart from what they say is built.
 **Concept:** the white paper [SFTP for Logfile Uploads and Firmware Downloads](https://github.com/OpenChargingTechnology/Whitepapers/blob/master/SFTP-FileTransfers/README.md)
-(`Whitepapers/SFTP-FileTransfers/README.md`, version 0.2). This file says how the paper is built
+(`Whitepapers/SFTP-FileTransfers/README.md`, version 0.3). This file says how the paper is built
 in the libraries of this repository, in which order, and what has to be decided first. Section
 numbers without a name are the paper's.
 
@@ -57,8 +57,8 @@ Decided by Achim on 2026-11-13 (the paper's section 13.1):
 | | Decision | Follows |
 |---|---|---|
 | 1 | File servers are instances of `SSHPeerController` only, found by address and port. | An LC dialled over `ssh://` is entered there as well. |
-| 2 | **One key per file server and login**, not one `SFTP` key. | A key store per peer and login in WWCP_Node; `FileTransferPublicKey[<login>]`; `SignSSHKey`/`SSHKeySigned` get `peer` and `login`; the station's single `id_ed25519_sftp` goes. |
-| 3 | Writes of a file server over OCPP only when signed by a signer of pin sets. | The signers the station has for `SSHClientController` judge `SSHPeerController` writes too. |
+| 2 | **One key per file server and login**, not one `SFTP` key. | A key store per peer and login in WWCP_Node; the lists `FileTransferPublicKeys` and `FileTransferKeyStates` of the peer; `SignSSHKey`/`SSHKeySigned` get `peer` and `login`; the station's single `id_ed25519_sftp` goes. |
+| 3 | **Who writes the peers over OCPP is the station's signature policy** - for every SSH peer, and for what makes one a file server as for the rest. Enforced: a signer with the right to the connections; off: unsigned, as before. This replaced "file servers signed only" and then "every peer signed only, by a check in the component" of the same day. | No check of its own in `SSHPeerController`; the session of the SSH peers builds the policy part (WWCP_OCPP, ChargingStation) and takes out the check that `df25a599` and `af774257` put in. No signature of a `ChangeConfiguration` has to reach the keys' source, and a Local Controller needs no signers for its peers. |
 | 4 | **A connection of its own, or a channel** of the node's connection to the peer (`FileTransferConnection` `Shared`, same login). | `SharedSSHConnectionTo(Host, "sftp")`; the server side must grant a station login `sftp`. |
 | 5 | Logs and firmware images are only files; everything else is OCPP or vendor logic. | `Upload` and `Download`, no log types. The transport packs nothing, verifies no signature, installs nothing. |
 
@@ -132,12 +132,14 @@ peers - `SSHPeerConfiguration` (id, address, user, `NTSServerSSH` trust), `"ssh"
 kept twice: a file server is such a peer with a `"fileTransfers"` object in its entry. One peer
 per address there, so a request has to name the address and the port of the peer (section 4.3).
 
-**Left of step 2**, after that push and a rebase:
+**Built after that push** - WWCP_Node `03948309`: `"fileTransfers"` in the peer's entry of the
+configuration file (`SSHPeerConfiguration`), the file servers derived from the configured peers
+in place of `SetFileServers`, the keys of logins and peers that are there no longer deleted when
+the peers change - decided by what is on disk, with a marker for the host and port the keys were
+made for - and `DefaultSSHPeerUser` as the login where neither a request nor the peer names one.
 
-- `"fileTransfers"` in the peer's entry of the configuration file, and the file servers derived
-  from the configured peers in place of `SetFileServers`; proposed to that session first.
-- The login where neither request nor peer names one: `DefaultSSHPeerUser` in place of
-  `FileTransferIdentity`.
+**Left of step 2:**
+
 - Key rotation per login (a pending key beside the current one), section 9.3.
 - A host certificate of a pinned CA, tested; a run against OpenSSH under WSL.
 - What every node kind must do alike, into the TestKit.
@@ -167,11 +169,22 @@ and 6 with it, as the station and the Local Controller share it:
 - Tests: `FileTransferBridgeTests` (8); WWCP_OCPP_Node_Tests 215 and the OCPP 2.1 tests 3297
   green.
 
+**Built after that:**
+
+- WWCP_OCPP `7ec2079f`: `GetLog`, `GetDiagnostics`, `UpdateFirmware` and `SignedUpdateFirmware`
+  of OCPP 1.6 on the same file transfers, in the fewer words 1.6 has; `IFileTransferNode` of
+  OCPP 1.6, which `TestChargePointNode` is.
+- WWCP_OCPP `df25a599`: the seven variables of section 8.1 at `SSHPeerController` -
+  `FileTransferPublicKeys` and `FileTransferKeyStates` as lists of the peer, no variable instance
+  per login - their keys of OCPP 1.6, and `fileTransfers` carried through every change of the
+  peers. Its check by pin set signers goes again (decision 3).
+- WWCP_OCPP `9bfa9d93`: `peer` and `login` in `SignSSHKey` and `SSHKeySigned`, JSON and CBOR.
+
 **Left of step 3:**
 
-- The handlers of OCPP 1.6: `GetLog`, `GetDiagnostics`, `UpdateFirmware`,
-  `SignedUpdateFirmware` (the last three are commented out in `TestChargePointNode`).
-- Everything below that needs `SSHPeerController`, once it is on master.
+- The three station-wide variables of section 8.2; `FileTransferProtocols` with `SFTP`.
+- `SignSSHKey` and `SSHKeySigned` as `DataTransfer` over OCPP 1.6 and 2.0.1.
+- What follows below, as far as it is not named above.
 
 
 - `SSHPeerController`: the seven variables of section 8.1 and the three of 8.2, through the
@@ -191,9 +204,13 @@ and 6 with it, as the station and the Local Controller share it:
   logins and paths, and the `SFTP` public key to enrol there. A peer without OCPP can be added
   (today the station's peers are the hosts of its `ssh://` connections only).
 - The same at the command line and in the HTTP API, under the right that configures connections.
-- Signed writes over OCPP, with the signers of pin sets the station already has.
-- A login's key counts as confirmed after its `SSHKeySigned` or a confirmation on the page
-  (section 9.2); the station's single `SFTP` key and `id_ed25519_sftp` go.
+- **Built** - ChargingStation `c51a4218`: the custom triggers `SignSSHKey:SFTP:<peer>:<login>`
+  and `SignSSHKey:SFTP` show a key to the CSMS, and an `SSHKeySigned` that names the file server
+  and the login confirms it (section 9.2).
+- Who writes the peers over OCPP is the signature policy (decision 3): the session of the SSH
+  peers maps `SSHPeerController` to the station's connections.
+- Left: the station sends a `SignSSHKey` by itself when a login is added; a confirmation on the
+  page; the station's single `SFTP` key and `id_ed25519_sftp` go.
 
 ### Step 5 - ChargingStation: uploads
 
@@ -240,7 +257,9 @@ and 6 with it, as the station and the Local Controller share it:
 ### Step 9 - CSMS
 
 - A file server per station or group in its store, from which it builds the URL of a `GetLog` and
-  an `UpdateFirmware`; the signed write of the peer to the station.
+  an `UpdateFirmware`; the write of the peer to the station, signed where its policy asks for it.
+- On a `SignSSHKey` with a peer and a login: the key entered at that file server, and
+  `SSHKeySigned` with both.
 - Not in this repository; listed so the plan is whole.
 
 ### Step 10 - End to end, paper, pins
