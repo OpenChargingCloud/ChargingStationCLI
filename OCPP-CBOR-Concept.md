@@ -517,8 +517,11 @@ action no node here has a class for, and the free content of `DataTransfer` and
   - `ECCKeyPair.TryParse` asked for a private key and handed public and private key to its
     constructor the wrong way round, so no key pair was ever read. The private key is
     optional now, and one that is sent is read as what it is.
-  - Not written, as before: the default actions and the default key pairs of a policy,
-    which its parser does not read either.
+  - What a policy does with a message no rule is for - its default signing and
+    verification action, and the key pair of each - is written and read as well
+    (WWCP_Core 9c9f32c5, WWCP_OCPP 9c153121): an action where it is not what a policy
+    does anyway, a key pair as its public key. A policy that is to sign or to verify by
+    default and names no key for it is refused, as its constructor always refused it.
 
 ### 3.12 Found on the way, not changed
 
