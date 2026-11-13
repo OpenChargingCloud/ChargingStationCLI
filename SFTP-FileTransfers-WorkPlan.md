@@ -1,8 +1,8 @@
 # SFTP for Logfile Uploads and Firmware Downloads - Work Plan
 
-**Status:** plan, 2026-11-13. Nothing is built.
+**Status:** 2026-11-13. Step 1 is built (Hermod, branch `sftp/stream-transfers`, not pushed); the rest is plan.
 **Concept:** the white paper [SFTP for Logfile Uploads and Firmware Downloads](https://github.com/OpenChargingTechnology/Whitepapers/blob/master/SFTP-FileTransfers/README.md)
-(`Whitepapers/SFTP-FileTransfers/README.md`, version 0.1). This file says how the paper is built
+(`Whitepapers/SFTP-FileTransfers/README.md`, version 0.2). This file says how the paper is built
 in the libraries of this repository, in which order, and what has to be decided first. Section
 numbers without a name are the paper's.
 
@@ -17,7 +17,9 @@ A `GetLog`, `GetDiagnostics`, `UpdateFirmware`, `SignedUpdateFirmware` or `Publi
 2. the peer of that host and port is looked up in the node's own configuration, and with it whether
    it may be used for this transfer, under this login, on this path;
 3. the host key comes from the peer (pins or CAs), **never** from the first handshake;
-4. the node signs in with its `SFTP` key, moves the file, and closes the connection.
+4. the node signs in with the key it made for that login at that peer, moves the file, and closes
+   the connection - or, where the peer says `Shared` and the login is the one of the node's
+   connection to it, moves the file over one more channel of that connection.
 
 No peer, no transfer: the request is `Rejected`, and reported as a security event.
 
@@ -50,24 +52,24 @@ name, put it there* and *fetch that file, here it is*.
 
 ## 3. Decisions needed first
 
-The paper's chapter 13, questions 1 to 8, each with a proposal. Steps 2 to 4 depend on 1 to 5:
-
-| | Question | Proposal | Blocks |
-|---|---|---|---|
-| 1 | File servers as instances of `SSHPeerController` only? | yes | 2, 3 |
-| 2 | One `SFTP` key, or one per server or login? | one | 2, 4 |
-| 3 | Writes of a file server over OCPP only when signed? | yes | 3, 4 |
-| 4 | A connection of its own, always? | yes | 2 |
-| 5 | A password in the URL? | rejected | 2 |
-| 6 | `Record`/`Accept` on a test bench? | no | 2 |
-| 7 | Local Controller as file server of its stations' uploads? | later | 8 |
-| 8 | Standardization | with OCPP over SSH | - |
-
-Decided:
+Decided by Achim on 2026-11-13 (the paper's section 13.1):
 
 | | Decision | Follows |
 |---|---|---|
-| 2026-11-13 | Logs and firmware images are only files to be transferred; everything else is OCPP or vendor logic. | A file server is allowed `Upload` and `Download`, not log types. The transport packs nothing, verifies no signature and installs nothing. What a log type contains is not asked here. |
+| 1 | File servers are instances of `SSHPeerController` only, found by address and port. | An LC dialled over `ssh://` is entered there as well. |
+| 2 | **One key per file server and login**, not one `SFTP` key. | A key store per peer and login in WWCP_Node; `FileTransferPublicKey[<login>]`; `SignSSHKey`/`SSHKeySigned` get `peer` and `login`; the station's single `id_ed25519_sftp` goes. |
+| 3 | Writes of a file server over OCPP only when signed by a signer of pin sets. | The signers the station has for `SSHClientController` judge `SSHPeerController` writes too. |
+| 4 | **A connection of its own, or a channel** of the node's connection to the peer (`FileTransferConnection` `Shared`, same login). | `SharedSSHConnectionTo(Host, "sftp")`; the server side must grant a station login `sftp`. |
+| 5 | Logs and firmware images are only files; everything else is OCPP or vendor logic. | `Upload` and `Download`, no log types. The transport packs nothing, verifies no signature, installs nothing. |
+
+Open (the paper's section 13.2), each with a proposal the steps follow until decided otherwise:
+
+| | Question | Proposal | Touches |
+|---|---|---|---|
+| 1 | A password in the URL? | rejected | 2 |
+| 2 | `Record`/`Accept` on a test bench? | no | 2 |
+| 3 | Local Controller as file server of its stations' uploads? | later | 8 |
+| 4 | Standardization | with OCPP over SSH | - |
 
 ---
 
@@ -76,36 +78,54 @@ Decided:
 One commit per step and repository, tests in the same commit, as for the NTS steps. Library work is
 done in a scratch composite of clean clones, not in the shared `libs/`.
 
-### Step 1 - Hermod: what the client lacks
+### Step 1 - Hermod: what the client lacked (built)
 
-- `SftpClient`: a download into a `Stream` from an offset (resume), with a size limit and progress;
-  an upload from a `Stream` that opens with `CREAT | EXCL` and fails cleanly when the file exists.
-  Check what `UploadAsync` and `OpenFileStreamAsync` give before adding anything.
-- `SshClient`: a connect that offers exactly one key and `publickey` only, and reports *why* it
-  ended (host key refused, login refused, no subsystem) as distinct exceptions - section 5.3 maps
-  each to another status.
-- Host certificates (`HostCAs`) on the client, if question 1 of *OCPP over SSH* 12.3 is to be
-  closed here; otherwise pins only, and `HostCAs` stays a difference.
-- Tests: loopback against Hermod's own SFTP server, and against OpenSSH under WSL.
+Hermod `2de0a48d` on the branch `sftp/stream-transfers` of a scratch clone, on `a58a53af`; not
+pushed, to become a pull request. `SshClient` needed nothing: it offers the keys it is given and
+no password, takes the node's `DNSClient`, requires strict KEX, and already told a refused login
+and a refused subsystem apart.
+
+- `SftpClient.UploadAsync(RemotePath, Stream, Exclusive, Progress, SyncToDisk)`: a stream,
+  pipelined, never held in memory; `Exclusive` opens with `CREAT | EXCL`. The in-memory file
+  system ignored that flag, and refuses a file that is there now.
+- `SftpClient.DownloadAsync(RemotePath, Stream, Offset, MaxSize, Progress)`: from an offset on;
+  a file over `MaxSize` is refused before a byte is read (`SftpFileTooLargeException`); a file
+  that ends before the size the server said is an error.
+- **A fault found on the way:** a READ answered by any status was taken for the end of the file,
+  so a download that lost its permission half way returned the first half as the file. Only
+  `SSH_FX_EOF` ends a file now.
+- `SshHostKeyRejectedException` (a `SshWireException`), with the key shown: section 5.4 never
+  retries it, and the security event names the fingerprint.
+- Tests: `SftpTransferTests` (11), Hermod's SSH tests 644 green. Four checks mutated at once
+  turned three tests red; which one stayed green was not looked up - probably the host-key
+  exception in `SshHandshake`, which `HandshakeLoopbackTests` covers since it names the new type.
+- Not done: host certificates (`HostCAs`) are checked by the policy the caller passes; whether
+  the node's policy does is step 2. No run against OpenSSH under WSL yet.
 
 ### Step 2 - WWCP_Node: the file transfer of a node
 
 What every node does alike lives here, so that the station and the Local Controller share it.
 
 - **`SSHPeer` gets what a file server is**: `FileTransfers` (`Upload`, `Download`),
-  `FileTransferUsers`, `UploadPaths`, `DownloadPaths`; peers found by host **and port**
-  (section 4.3). Announce to the session that owns `SSHPeer` first.
+  `FileTransferUsers`, `UploadPaths`, `DownloadPaths`, `FileTransferConnection`; peers found by
+  host **and port** (section 4.3). Announce to the session that owns `SSHPeer` first.
+- **A key store per peer and login** (decision 2): made when a login is added, deleted with it,
+  owner-only like the host key; current and pending key, confirmed or not; the public lines for
+  the device model and the page.
 - **Configuration file**: the peers' new entries, read and written with the others
-  (`"fileTransfers"`, `"fileTransferUsers"`, `"uploadPaths"`, `"downloadPaths"`).
+  (`"fileTransfers"`, `"fileTransferUsers"`, `"uploadPaths"`, `"downloadPaths"`,
+  `"fileTransferConnection"`).
 - **`SftpLocation`**: the URL of chapter 3, parsed and refused there - password, query, fragment,
   `..`, control characters, `;fingerprint=`.
 - **`FileTransferPolicy.Judge(Location, Direction)`**: the four lookups of section 4.1 and the five
   cases of section 5.1, as one function that returns the peer, the login and the key, or the
   reason. It reads no `OnPinMismatch`, and refuses a peer whose key is learned and not pinned.
 - **`SftpTransfer`**: section 5.2 - resolve with the node's `DNSClient`, a connection of its own,
-  strict KEX, host key from the peer, the `SFTP` key, the `sftp` subsystem, `.part` and rename for
+  strict KEX, host key from the peer, the key of the login, the `sftp` subsystem; or section 5.3 -
+  `SharedSSHConnectionTo(Host, "sftp")` where the peer is `Shared` and the login is that
+  connection's; `.part` and rename for
   uploads, offset and limit for downloads, time-outs, cancellation, retries by the table of
-  section 5.3.
+  section 5.4.
 - The interface to the logic above is two calls and their events: *upload this file (a stream and
   a name) to that location* and *download that location into this place*; started, progress,
   ended and why. Nothing in it knows what a log or a firmware image is.
@@ -114,8 +134,10 @@ What every node does alike lives here, so that the station and the Local Control
 
 ### Step 3 - WWCP_OCPP: device model, reason codes, events
 
-- `SSHPeerController`: the five variables of section 8.1 and the three of 8.2, through the
-  `DeviceModelBridge` of WWCP_OCPP_Node; writes signed as question 3 decides.
+- `SSHPeerController`: the seven variables of section 8.1 and the three of 8.2, through the
+  `DeviceModelBridge` of WWCP_OCPP_Node; writes only when signed (decision 3).
+- `SignSSHKey` and `SSHKeySigned` get `peer` and `login`; the custom trigger
+  `SignSSHKey:SFTP:<peer>:<login>` (section 9.2).
 - `OCPPCommCtrlr.FileTransferProtocols` lists `SFTP`, and so does
   `SupportedFileTransferProtocols` of 1.6.
 - The reason codes `InvalidURL` and `FileServerNotPermitted`; the security events of section 8.5.
@@ -130,8 +152,8 @@ What every node does alike lives here, so that the station and the Local Control
   (today the station's peers are the hosts of its `ssh://` connections only).
 - The same at the command line and in the HTTP API, under the right that configures connections.
 - Signed writes over OCPP, with the signers of pin sets the station already has.
-- The `SFTP` key counts as confirmed after `SSHKeySigned` or a confirmation on the page
-  (chapter 9).
+- A login's key counts as confirmed after its `SSHKeySigned` or a confirmation on the page
+  (section 9.2); the station's single `SFTP` key and `id_ed25519_sftp` go.
 
 ### Step 5 - ChargingStation: uploads
 
@@ -141,7 +163,7 @@ What every node does alike lives here, so that the station and the Local Control
   implements (`logType`, time window → a stream and a name, or "nothing to send"). The reference
   station gets the plainest provider that makes the path testable - the node's log file of the
   day, as it is.
-- `LogStatusNotification` / `DiagnosticsStatusNotification` by section 5.3; a second request
+- `LogStatusNotification` / `DiagnosticsStatusNotification` by section 5.4; a second request
   cancels the first (`AcceptedCanceled`); a request survives a lost OCPP connection, and its
   notification is queued offline.
 - `TriggerMessage` `LogStatusNotification` answers with the state of the running upload, or `Idle`.
@@ -159,7 +181,8 @@ What every node does alike lives here, so that the station and the Local Control
 
 ### Step 7 - The file server in our own nodes (WWCP_Node, LocalController, CSMS)
 
-- Two SFTP areas for station logins with a key of the purpose `SFTP`: `/upload` (per station:
+- A station's own login may be granted `sftp` (decision 4), confined to the same two areas.
+- Two SFTP areas for station logins, and for logins with a key of the purpose `SFTP`: `/upload` (per station:
   create and rename the own `.part`, nothing else; a quota) and `/firmware` (read only).
   SFTP-Concept 2.10 put these off; this is where they come back.
 - `InstallSSHKey` with the purpose `SFTP` at the Local Controller; the CSMS enrols the key on
@@ -172,7 +195,7 @@ What every node does alike lives here, so that the station and the Local Control
   URL in `PublishFirmwareStatusNotification` (section 7.3).
 - Its own `GetLog` and `UpdateFirmware`, through the same handlers as the station where the code
   can be shared (WWCP_OCPP_Node).
-- Question 7 decides whether it takes its stations' uploads.
+- Question 3 decides whether it takes its stations' uploads.
 
 ### Step 9 - CSMS
 
@@ -213,6 +236,4 @@ What every node does alike lives here, so that the station and the Local Control
 - What a log is, how it is collected and packed; verifying and installing firmware. OCPP's logic
   and the vendor's, behind the two seams of steps 5 and 6.
 - HTTPS and FTPS transfers; the station lists `SFTP` and nothing weaker until somebody asks.
-- SFTP as a channel of the shared connection (question 4).
-- A Local Controller that forwards its stations' uploads (question 7).
-- A key per file server or login (question 2).
+- A Local Controller that forwards its stations' uploads (question 3).
