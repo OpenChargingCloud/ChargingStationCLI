@@ -464,7 +464,7 @@ What has no CBOR of its own, in both versions:
   `FlushPeriodicEventStream` are commented out.
 - The messages of the binary format cross CBOR as a byte string, by design (3.3).
 
-### 3.10 The messages without an answer (WWCP_OCPP)
+### 3.10 The messages without an answer (WWCP_OCPP 37196c8c)
 
 The last messages of OCPP 2.1 that crossed CBOR without a class:
 
@@ -487,7 +487,7 @@ With this, nothing the adapters of OCPP 2.1 and OCPP 1.6 process is carried blin
 action no node here has a class for, and the free content of `DataTransfer` and
 `MessageTransfer`.
 
-### 3.11 Found on the way, and fixed (WWCP_OCPP, WWCP_Core)
+### 3.11 Found on the way, and fixed (WWCP_Core d082f10a, WWCP_OCPP bc018f17)
 
 - **A response error in overlay mode is read back.** `OCPP_JSONResponseErrorMessage` wrote
   the overlay form (7 items) and read the standard form (5 items) alone, in JSON and
