@@ -21,6 +21,12 @@ A `GetLog`, `GetDiagnostics`, `UpdateFirmware`, `SignedUpdateFirmware` or `Publi
 
 No peer, no transfer: the request is `Rejected`, and reported as a security event.
 
+**A file is a file** (Achim, 2026-11-13): a `DiagnosticsLog`, a `SecurityLog` and a firmware image
+are files to be transferred. What is in a log, how it is packed, whether an image's signature
+holds and how it is installed is OCPP's logic and the vendor's, and not part of this plan. The
+plan builds the transport and the two places where that logic meets it: *here is a file and its
+name, put it there* and *fetch that file, here it is*.
+
 ---
 
 ## 2. What is there today
@@ -44,7 +50,7 @@ No peer, no transfer: the request is `Rejected`, and reported as a security even
 
 ## 3. Decisions needed first
 
-The paper's chapter 13, questions 1 to 10, each with a proposal. Steps 2 to 4 depend on 1 to 5:
+The paper's chapter 13, questions 1 to 8, each with a proposal. Steps 2 to 4 depend on 1 to 5:
 
 | | Question | Proposal | Blocks |
 |---|---|---|---|
@@ -54,21 +60,14 @@ The paper's chapter 13, questions 1 to 10, each with a proposal. Steps 2 to 4 de
 | 4 | A connection of its own, always? | yes | 2 |
 | 5 | A password in the URL? | rejected | 2 |
 | 6 | `Record`/`Accept` on a test bench? | no | 2 |
-| 7 | One grant `LogUpload` for all log types and diagnostics? | yes | 3 |
-| 8 | One archive per request? | yes (`.tar.gz`) | 5 |
-| 9 | Local Controller as log server of its stations? | later | 8 |
-| 10 | Standardization | with OCPP over SSH | - |
+| 7 | Local Controller as file server of its stations' uploads? | later | 8 |
+| 8 | Standardization | with OCPP over SSH | - |
 
-Two questions of this plan, not of the paper:
+Decided:
 
-- **A. Firmware: how far?** This plan ends with the image downloaded, verified against
-  `signingCertificate` and `signature`, and reported `Downloaded` / `SignatureVerified`. Installing
-  it is a concept of its own (SFTP-Concept 2.10; *Firmware Updates with Software Separation*).
-  Until then the station reports `InstallationFailed` with a reason, or does not list firmware
-  downloads as supported - to be decided.
-- **B. What the logs are.** `DiagnosticsLog`: the node's log files (`/logs`) of the time window.
-  `SecurityLog`: the security events, and on the station the signed metrological day files with
-  `signing-key.pem`? `DataCollectorLog`: nothing yet. To be decided before step 5.
+| | Decision | Follows |
+|---|---|---|
+| 2026-11-13 | Logs and firmware images are only files to be transferred; everything else is OCPP or vendor logic. | A file server is allowed `Upload` and `Download`, not log types. The transport packs nothing, verifies no signature and installs nothing. What a log type contains is not asked here. |
 
 ---
 
@@ -93,21 +92,23 @@ done in a scratch composite of clean clones, not in the shared `libs/`.
 
 What every node does alike lives here, so that the station and the Local Controller share it.
 
-- **`SSHPeer` gets what a file server is**: `FileTransfers` (`LogUpload`, `FirmwareDownload`),
+- **`SSHPeer` gets what a file server is**: `FileTransfers` (`Upload`, `Download`),
   `FileTransferUsers`, `UploadPaths`, `DownloadPaths`; peers found by host **and port**
   (section 4.3). Announce to the session that owns `SSHPeer` first.
 - **Configuration file**: the peers' new entries, read and written with the others
   (`"fileTransfers"`, `"fileTransferUsers"`, `"uploadPaths"`, `"downloadPaths"`).
 - **`SftpLocation`**: the URL of chapter 3, parsed and refused there - password, query, fragment,
   `..`, control characters, `;fingerprint=`.
-- **`FileTransferPolicy.Judge(Location, Kind)`**: the four lookups of section 4.1 and the five
+- **`FileTransferPolicy.Judge(Location, Direction)`**: the four lookups of section 4.1 and the five
   cases of section 5.1, as one function that returns the peer, the login and the key, or the
   reason. It reads no `OnPinMismatch`, and refuses a peer whose key is learned and not pinned.
 - **`SftpTransfer`**: section 5.2 - resolve with the node's `DNSClient`, a connection of its own,
   strict KEX, host key from the peer, the `SFTP` key, the `sftp` subsystem, `.part` and rename for
   uploads, offset and limit for downloads, time-outs, cancellation, retries by the table of
   section 5.3.
-- Events for the log and for the OCPP layer: started, progress, ended and why.
+- The interface to the logic above is two calls and their events: *upload this file (a stream and
+  a name) to that location* and *download that location into this place*; started, progress,
+  ended and why. Nothing in it knows what a log or a firmware image is.
 - Tests in WWCP_Node_Tests against a node's own SFTP server; what every node kind must do alike
   goes into the TestKit.
 
@@ -132,23 +133,28 @@ What every node does alike lives here, so that the station and the Local Control
 - The `SFTP` key counts as confirmed after `SSHKeySigned` or a confirmation on the page
   (chapter 9).
 
-### Step 5 - ChargingStation: logs and diagnostics
+### Step 5 - ChargingStation: uploads
 
-- Handlers for `GetLog` (2.1, 1.6) and `GetDiagnostics` (1.6): `Judge`, the response with the file
-  name, then the transfer in the background.
-- The archive (question 8, question B): the files of the time window, packed while streamed, not
-  built in memory.
+- Handlers for `GetLog` (2.1, 1.6) and `GetDiagnostics` (1.6): `Judge`, then ask the provider of
+  the file, answer with its name, and upload in the background.
+- **The provider of the file is a seam**, not part of this plan: an interface the vendor's logic
+  implements (`logType`, time window → a stream and a name, or "nothing to send"). The reference
+  station gets the plainest provider that makes the path testable - the node's log file of the
+  day, as it is.
 - `LogStatusNotification` / `DiagnosticsStatusNotification` by section 5.3; a second request
   cancels the first (`AcceptedCanceled`); a request survives a lost OCPP connection, and its
   notification is queued offline.
 - `TriggerMessage` `LogStatusNotification` answers with the state of the running upload, or `Idle`.
 
-### Step 6 - ChargingStation: firmware download
+### Step 6 - ChargingStation: downloads
 
 - Handlers for `UpdateFirmware` (2.1, 1.6) and `SignedUpdateFirmware` (1.6): `Judge` when the
   request arrives and again at `retrieveDateTime`.
-- The download into a staging directory with its limit; resume on retry; signature check;
-  `FirmwareStatusNotification` up to where question A ends.
+- The download into a staging directory with its limit; resume on retry;
+  `FirmwareStatusNotification` `Downloading`, `DownloadPaused`, `Downloaded`, `DownloadFailed`.
+- **The consumer of the file is a seam** as well: the downloaded file and the request are handed
+  to the vendor's logic, which verifies, installs and reports from there. The reference station's
+  consumer keeps the file and reports nothing further.
 - `TriggerMessage` `FirmwareStatusNotification`.
 
 ### Step 7 - The file server in our own nodes (WWCP_Node, LocalController, CSMS)
@@ -166,7 +172,7 @@ What every node does alike lives here, so that the station and the Local Control
   URL in `PublishFirmwareStatusNotification` (section 7.3).
 - Its own `GetLog` and `UpdateFirmware`, through the same handlers as the station where the code
   can be shared (WWCP_OCPP_Node).
-- Question 9 decides whether it takes its stations' logs.
+- Question 7 decides whether it takes its stations' uploads.
 
 ### Step 9 - CSMS
 
@@ -176,8 +182,8 @@ What every node does alike lives here, so that the station and the Local Control
 
 ### Step 10 - End to end, paper, pins
 
-- EVChargingTestEnvironment: a real station, a real file server (a CSMS node and OpenSSH), logs up
-  and firmware down in OCPP 2.1 and 1.6.
+- EVChargingTestEnvironment: a real station, a real file server (a CSMS node and OpenSSH), a file
+  up by `GetLog` and a file down by `UpdateFirmware`, in OCPP 2.1 and 1.6.
 - Negative cases, each mutated once: an unknown host, the right host on another port, a peer that
   is no file server, a login not listed, a path outside, a password in the URL, a contradicting
   `;fingerprint=`, a foreign host key (no retry, security event), a peer on probation, a key the
@@ -204,8 +210,9 @@ What every node does alike lives here, so that the station and the Local Control
 
 ## 6. Not in this plan
 
-- Installing firmware (question A).
+- What a log is, how it is collected and packed; verifying and installing firmware. OCPP's logic
+  and the vendor's, behind the two seams of steps 5 and 6.
 - HTTPS and FTPS transfers; the station lists `SFTP` and nothing weaker until somebody asks.
 - SFTP as a channel of the shared connection (question 4).
-- A Local Controller that forwards its stations' logs (question 9).
+- A Local Controller that forwards its stations' uploads (question 7).
 - A key per file server or login (question 2).
