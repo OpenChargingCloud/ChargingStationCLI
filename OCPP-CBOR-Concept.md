@@ -155,9 +155,8 @@ The adapter still works on JSON, in all its 340 files. It translates at its edge
 Not part of step 5:
 
 - **The binary format** was refused over a CBOR connection; step 6 carries it (3.3).
-- **Messages without an answer are carried blind.** `MessageTransfer` and
-  `NotifyPeriodicEventStream` have no CBOR serializers; over CBOR they are what their JSON
-  says, value by value (`CBORJSON`), and are read back the same way.
+- **Messages without an answer were carried blind**: `MessageTransfer` and
+  `NotifyPeriodicEventStream` had no CBOR serializers. They have them since 3.10.
 - **Custom serializers and parsers** see the JSON on both sides, but not the translation:
   a property only a custom serializer writes does not cross a CBOR connection.
 - **OCPP over SSH with CBOR** goes through the same edge, but has no test yet (step 10).
@@ -459,26 +458,70 @@ What has no CBOR of its own, in both versions:
   as CBOR as every `DataTransfer` is. The signature policy and user role messages and
   `NotifyNetworkTopology` are files of OCPP 1.6 that are commented out: there are no such
   messages in OCPP 1.6.
-- OCPP 2.1: three messages without an answer - `MessageTransfer`,
-  `NotifyPeriodicEventStream` and `NotifyNetworkTopology` - are carried as what their JSON
-  says, value by value (`CBORJSON`). `GetCRL` and `FlushPeriodicEventStream` are commented
-  out.
+- OCPP 2.1: the three messages without an answer - `MessageTransfer`,
+  `NotifyPeriodicEventStream` and `NotifyNetworkTopology` - were carried as what their JSON
+  says, value by value, and have a CBOR form of their own since 3.10. `GetCRL` and
+  `FlushPeriodicEventStream` are commented out.
 - The messages of the binary format cross CBOR as a byte string, by design (3.3).
 
-### 3.10 Found on the way, not changed
+### 3.10 The messages without an answer (WWCP_OCPP)
 
-- `OCPP_JSONResponseErrorMessage` writes the overlay form (7 items) and reads the standard
-  form (5 items) alone, so a response error in overlay mode is not read back - in JSON, and
-  therefore in CBOR.
-- `UserRole.ToJSON` writes `customData` only while its parser asks for `id`; an
-  `AddUserRoleRequest` is not read back, and carries its role under the key
-  `signaturePolicy`. CBOR mirrors both.
-- `SignaturePolicy` rules and `UserRole` key pairs are read from JSON but never written;
-  they are not in CBOR.
-- `NotifyWebPaymentStartedResponse.ToJSON` leaves out the `statusInfo` its parser reads;
-  its `ToCBOR` writes it.
-- A point in time with fractions of a second is written by the shared timestamp helper as
-  a float under tag 1.
+The last messages of OCPP 2.1 that crossed CBOR without a class:
+
+- **`MessageTransfer`** is what a `DataTransfer` request is: its vendor, its message
+  identification, data of any shape as the CBOR value of its JSON value, its signatures.
+- **`NotifyPeriodicEventStream`**: its base time is a point in time, the offsets of its
+  data elements are durations (`StreamDataElement` had its CBOR already).
+- **`NotifyNetworkTopology`**, and with it the three data structures of the network
+  topology - `NetworkTopologyInformation`, `NetworkRoutingInformation`,
+  `VirtualNetworkLinkInformation`. They are WWCP_Core's, which has no CBOR at all; their
+  CBOR is in WWCP_OCPP_Common, where that of a signature and of custom data is
+  (`NetworkTopologyCBORExtensions`): a point in time is a point in time, a timeout and a
+  latency are durations, a capacity is a number of bit/s and a packet loss a number of
+  percent - each of the last three as an array of its mean and its standard deviation.
+- **Tests**: `EveryActionCrossesCBORTests` - the three are translated through their
+  classes and come back as they went, and the base time of a periodic event stream is a
+  tagged point in time in its CBOR, not a text.
+
+With this, nothing the adapters of OCPP 2.1 and OCPP 1.6 process is carried blind but an
+action no node here has a class for, and the free content of `DataTransfer` and
+`MessageTransfer`.
+
+### 3.11 Found on the way, and fixed (WWCP_OCPP, WWCP_Core)
+
+- **A response error in overlay mode is read back.** `OCPP_JSONResponseErrorMessage` wrote
+  the overlay form (7 items) and read the standard form (5 items) alone, in JSON and
+  therefore in CBOR. It reads both now, as a request error does: whom it is for, and which
+  way it came. The adapters knew what to do with one already.
+- **A user role says who it is.** `UserRole.ToJSON` wrote `customData` only while its
+  parser asks for `id`, so an `AddUserRoleRequest` was not read back. It writes its
+  identification and its description now, in JSON and in CBOR, and the request carries it
+  under the key `userRole`, not `signaturePolicy`.
+- **`NotifyWebPaymentStartedResponse.ToJSON` writes the `statusInfo`** its parser reads,
+  as its `ToCBOR` did.
+- **A point in time is never a float.** The shared timestamp helper wrote one with a
+  fraction of a second as a float under tag 1. It writes a decimal fraction (tag 4) under
+  tag 1 now, which says every digit down to the 100 ns of a tick, as every other number
+  here is a decimal and no float. RFC 8949 has an integer or a float under tag 1; the
+  decimal fraction is what Styx reads there when it makes JSON of CBOR. The float of
+  another sender is still read, to the microsecond.
+
+- **A signature policy writes its rules, and a user role its key pairs - with their
+  public keys alone** (Achim, 2026-11-13). They were read from JSON and never written.
+  - A key pair says of itself to anybody else its public key, its algorithm, its
+    serialization and its encoding (`KeyPair.ToPublicJSON`, `ToPublicCBOR`): the private
+    key is in no rule, no role and no policy on the wire, and so in nothing an adapter says
+    about itself (`OCPPAdapter.ToJSON`). The public key is bytes in CBOR.
+  - A rule says the message it is for (`context`); a rule without one is for the default
+    context, as every rule read from JSON was.
+  - `ECCKeyPair.TryParse` asked for a private key and handed public and private key to its
+    constructor the wrong way round, so no key pair was ever read. The private key is
+    optional now, and one that is sent is read as what it is.
+  - Not written, as before: the default actions and the default key pairs of a policy,
+    which its parser does not read either.
+
+### 3.12 Found on the way, not changed
+
 - `Cost.TryParse` takes any `amountMultiplier` from JSON; the CBOR reader holds it to the
   -3 to 3 of OCPP. Four tests sent 23, which JSON carried and CBOR refused; they send 3 now.
 - Two classes are called `NotifyWebPaymentStartedRequest`: the message, and the same
