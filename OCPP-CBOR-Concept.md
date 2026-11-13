@@ -384,7 +384,42 @@ Not tested, and said so:
 - A commissioning tool speaking CBOR to the station's own SSH server: that server offers
   `ocpp2.1, ocpp2.0.1`.
 
-### 3.8 Found on the way, not changed
+### 3.8 After the plan (WWCP_Core 0dbd2a66, WWCP_OCPP cc333ecb, ChargingStation 5daa4b4, 7a18693, 3574244)
+
+Three of the things the plan left open, built on 2026-11-12:
+
+- **Signature formats per connection.** `SignaturePolicy.FormatsOf` (WWCP_Core) asks, for
+  each message a policy signs, what its connection says; the OCPP adapter answers
+  (`SetSignatureFormats` for a node at the far end of a connection, or for a client, and
+  `SignatureFormatsFor`). A request and a message without an answer are signed the way the
+  next node of their destination says, a response the way the node its request came from
+  says - by name: two connections to nodes of one name are not told apart for a response.
+  The station has `signatureFormats` on a connection (`"jws"`, `"cose"`, `"both"`;
+  `"policy"` or nothing for what its signature policy says), tells its OCPP 2.1 node when
+  the connection is made, and has the field on the connections page. Tests:
+  `SignatureFormatsPerConnectionTests` (WWCP_OCPP), `SignatureFormatsOfAConnectionTests`
+  (ChargingStation). White paper: Q27.
+- **A commissioning tool over CBOR.** The SSH server of the station takes `ocpp2.1cbor`
+  beside `ocpp2.1` and `ocpp2.0.1`; a tool that offers it is handed to the OCPP 2.1 node
+  as before, and is answered in CBOR (`CommissioningOverSSHTests`).
+- **The station program against a CSMS node.** `AgainstACSMSNodeOverCBORTests`: the
+  station's tests reference the CSMS node of WWCP_OCPP now, and run the program against it
+  over `ocpp2.1` and over `ocpp2.1cbor` - registered, its BootNotification read by the
+  class of the message, asked by the CSMS and answering.
+
+- **What an `ssh://` connection agreed on** is said where a WebSocket's is: under
+  `subprotocolInUse`, as the chip "CBOR" on the connections page and in the log
+  (ChargingStation cf26099).
+- **Signature formats over `ssh://`.** `OCPPOverSSHTests` (WWCP_OCPP 697d5748) and
+  `DiallingOverSSHWithCBORTests` (ChargingStation cf26099): what is said of an SSH client is
+  what its route says, in JSON and in CBOR. Nothing but tests had to be written.
+
+Seen while testing: charging stations number their requests alike, so two stations that
+sign with one key send signatures with one key identifier under one message id, and a CSMS
+that remembers what it has seen takes the second for a replay. That is what the replay
+cache of the white paper says (section 4.1, "Freshness"); a key is one signer's.
+
+### 3.9 Found on the way, not changed
 
 - `OCPP_JSONResponseErrorMessage` writes the overlay form (7 items) and reads the standard
   form (5 items) alone, so a response error in overlay mode is not read back - in JSON, and
