@@ -1,6 +1,6 @@
 # SFTP for Logfile Uploads and Firmware Downloads - Work Plan
 
-**Status:** 2026-11-13. Step 1 (Hermod) and the first part of step 2 (WWCP_Node) are built, on branches of scratch clones, not pushed; the rest is plan.
+**Status:** 2026-11-13. Step 1 (Hermod, pull request #255), the first part of step 2 (WWCP_Node) and the OCPP 2.1 part of step 3 (WWCP_OCPP) are built and pushed as branches; nothing is on a master branch, and nothing is pinned here.
 **Concept:** the white paper [SFTP for Logfile Uploads and Firmware Downloads](https://github.com/OpenChargingTechnology/Whitepapers/blob/master/SFTP-FileTransfers/README.md)
 (`Whitepapers/SFTP-FileTransfers/README.md`, version 0.2). This file says how the paper is built
 in the libraries of this repository, in which order, and what has to be decided first. Section
@@ -80,8 +80,8 @@ done in a scratch composite of clean clones, not in the shared `libs/`.
 
 ### Step 1 - Hermod: what the client lacked (built)
 
-Hermod `2de0a48d` on the branch `sftp/stream-transfers` of a scratch clone, on `a58a53af`; not
-pushed, to become a pull request. `SshClient` needed nothing: it offers the keys it is given and
+Hermod `aa42d703` on the branch `sftp/stream-transfers`, on `e4c4e4b1`:
+[Vanaheimr/Hermod#255](https://github.com/Vanaheimr/Hermod/pull/255), open. `SshClient` needed nothing: it offers the keys it is given and
 no password, takes the node's `DNSClient`, requires strict KEX, and already told a refused login
 and a refused subsystem apart.
 
@@ -106,8 +106,9 @@ and a refused subsystem apart.
 
 What every node does alike lives here, so that the station and the Local Controller share it.
 
-**Built** - WWCP_Node `8f56b25` on the branch `sftp/file-transfers` of a scratch clone, on
-`8da01db`, with Hermod's branch of step 1; not pushed. New files only:
+**Built** - WWCP_Node `8f56b25` on the branch `sftp/file-transfers` (GitHub, git1, git2), on
+`8da01db`, with Hermod's branch of step 1; not on master, which would not build before pull
+request #255 is merged. New files only:
 
 - `SecureShell/SftpLocation.cs`: the URL of chapter 3, read by hand - a password, a query, a
   fragment, `..` and control characters make it no location; hosts compared as text.
@@ -148,6 +149,31 @@ take `.part` and never replace.
 
 ### Step 3 - WWCP_OCPP: device model, reason codes, events
 
+**Built** - WWCP_OCPP `10ed9951` on the branch `sftp/file-transfers` (GitHub, git1, git2), on
+`bc018f17`, with the branches of steps 1 and 2; not on master. It took the OCPP half of steps 5
+and 6 with it, as the station and the Local Controller share it:
+
+- `WWCP_OCPP_Node/FileTransfers.cs`, for every OCPP version: the answer to a request, with
+  `InvalidURL` and `FileServerNotPermitted` in a sentence that does not say what the node holds;
+  after the answer the transfer, the retries of the request for what may be better in a minute
+  and nothing else, a new request cancelling the one before it, a download that waits until it
+  is due and is judged again then, a staging directory. `FileProvider` and `FileConsumer` are the
+  two seams to the logic above.
+- `DeviceModelBridge.FileTransfers.cs`: `GetLog` and `UpdateFirmware` of OCPP 2.1 in OCPP's
+  words, the notifications up to `Downloaded`, and the security events `FileTransferRefused` and
+  `InvalidFileServerHostKey` for 2.1 and 1.6.
+- `IFileTransferNode` (WWCP_OCPPv2.1): a node that leaves both requests to a processor and sends
+  what is told; `TestChargingStationNode` is one.
+- Tests: `FileTransferBridgeTests` (8); WWCP_OCPP_Node_Tests 215 and the OCPP 2.1 tests 3297
+  green.
+
+**Left of step 3:**
+
+- The handlers of OCPP 1.6: `GetLog`, `GetDiagnostics`, `UpdateFirmware`,
+  `SignedUpdateFirmware` (the last three are commented out in `TestChargePointNode`).
+- Everything below that needs `SSHPeerController`, once it is on master.
+
+
 - `SSHPeerController`: the seven variables of section 8.1 and the three of 8.2, through the
   `DeviceModelBridge` of WWCP_OCPP_Node; writes only when signed (decision 3).
 - `SignSSHKey` and `SSHKeySigned` get `peer` and `login`; the custom trigger
@@ -171,8 +197,8 @@ take `.part` and never replace.
 
 ### Step 5 - ChargingStation: uploads
 
-- Handlers for `GetLog` (2.1, 1.6) and `GetDiagnostics` (1.6): `Judge`, then ask the provider of
-  the file, answer with its name, and upload in the background.
+- The handlers are WWCP_OCPP_Node's (step 3). The station hands its OCPP nodes to the bridge as
+  it does already, and sets the provider.
 - **The provider of the file is a seam**, not part of this plan: an interface the vendor's logic
   implements (`logType`, time window → a stream and a name, or "nothing to send"). The reference
   station gets the plainest provider that makes the path testable - the node's log file of the
