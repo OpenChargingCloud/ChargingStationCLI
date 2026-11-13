@@ -1,6 +1,6 @@
 # SFTP for Logfile Uploads and Firmware Downloads - Work Plan
 
-**Status:** 2026-11-13. Step 1 is built (Hermod, branch `sftp/stream-transfers`, not pushed); the rest is plan.
+**Status:** 2026-11-13. Step 1 (Hermod) and the first part of step 2 (WWCP_Node) are built, on branches of scratch clones, not pushed; the rest is plan.
 **Concept:** the white paper [SFTP for Logfile Uploads and Firmware Downloads](https://github.com/OpenChargingTechnology/Whitepapers/blob/master/SFTP-FileTransfers/README.md)
 (`Whitepapers/SFTP-FileTransfers/README.md`, version 0.2). This file says how the paper is built
 in the libraries of this repository, in which order, and what has to be decided first. Section
@@ -106,31 +106,45 @@ and a refused subsystem apart.
 
 What every node does alike lives here, so that the station and the Local Controller share it.
 
-- **`SSHPeer` gets what a file server is**: `FileTransfers` (`Upload`, `Download`),
-  `FileTransferUsers`, `UploadPaths`, `DownloadPaths`, `FileTransferConnection`; peers found by
-  host **and port** (section 4.3). Announce to the session that owns `SSHPeer` first.
-- **A key store per peer and login** (decision 2): made when a login is added, deleted with it,
-  owner-only like the host key; current and pending key, confirmed or not; the public lines for
-  the device model and the page.
-- **Configuration file**: the peers' new entries, read and written with the others
-  (`"fileTransfers"`, `"fileTransferUsers"`, `"uploadPaths"`, `"downloadPaths"`,
-  `"fileTransferConnection"`).
-- **`SftpLocation`**: the URL of chapter 3, parsed and refused there - password, query, fragment,
-  `..`, control characters, `;fingerprint=`.
-- **`FileTransferPolicy.Judge(Location, Direction)`**: the four lookups of section 4.1 and the five
-  cases of section 5.1, as one function that returns the peer, the login and the key, or the
-  reason. It reads no `OnPinMismatch`, and refuses a peer whose key is learned and not pinned.
-- **`SftpTransfer`**: section 5.2 - resolve with the node's `DNSClient`, a connection of its own,
-  strict KEX, host key from the peer, the key of the login, the `sftp` subsystem; or section 5.3 -
-  `SharedSSHConnectionTo(Host, "sftp")` where the peer is `Shared` and the login is that
-  connection's; `.part` and rename for
-  uploads, offset and limit for downloads, time-outs, cancellation, retries by the table of
-  section 5.4.
-- The interface to the logic above is two calls and their events: *upload this file (a stream and
-  a name) to that location* and *download that location into this place*; started, progress,
-  ended and why. Nothing in it knows what a log or a firmware image is.
-- Tests in WWCP_Node_Tests against a node's own SFTP server; what every node kind must do alike
-  goes into the TestKit.
+**Built** - WWCP_Node `8f56b25` on the branch `sftp/file-transfers` of a scratch clone, on
+`8da01db`, with Hermod's branch of step 1; not pushed. New files only:
+
+- `SecureShell/SftpLocation.cs`: the URL of chapter 3, read by hand - a password, a query, a
+  fragment, `..` and control characters make it no location; hosts compared as text.
+- `SecureShell/SSHFileServer.cs`: `SSHFileTransfers` (directions, logins, directories per
+  direction with `{id}`, `dedicated`/`shared`; read from and written as JSON) and `SSHFileServer`
+  (name, address, login, and the `NTSServerSSH` it is held to, whose `Believes` judges the host
+  key).
+- `WWCPNode.FileTransfers.cs`: `SetFileServers`, `JudgeFileTransfer` (sections 4.1 and 5.1, one
+  reason code for everything the configuration lacks, `OnFileTransferRefused`), a key per file
+  server and login (`FileTransferPublicKey`, `ConfirmFileTransferKey`; deleted with the login,
+  and with a peer whose address or port changed), `UploadFileAsync` (`<name>.part`, `CREAT |
+  EXCL`, the plain rename) and `DownloadFileAsync` (offset, limit), on a connection of its own or
+  as a channel of `SharedSSHConnectionTo(Host, "sftp")`; `FileTransferResult.MayBeTriedAgain` is
+  the table of section 5.4, and `OnFileServerHostKeyRefused` its security event.
+- Tests: `FileTransferTests` (33), against a second node as the SFTP server; the whole
+  WWCP_Node suite is green (1485).
+
+**Agreed with the session that owns the SSH peers** ("DNS-over-SSH Whitepaper"): its configured
+peers - `SSHPeerConfiguration` (id, address, user, `NTSServerSSH` trust), `"ssh": { "peers": [...] }`,
+`TryUpdateSSHPeers`, `SSHPeerController` - are committed locally and to be pushed. No pins are
+kept twice: a file server is such a peer with a `"fileTransfers"` object in its entry. One peer
+per address there, so a request has to name the address and the port of the peer (section 4.3).
+
+**Left of step 2**, after that push and a rebase:
+
+- `"fileTransfers"` in the peer's entry of the configuration file, and the file servers derived
+  from the configured peers in place of `SetFileServers`; proposed to that session first.
+- The login where neither request nor peer names one: `DefaultSSHPeerUser` in place of
+  `FileTransferIdentity`.
+- Key rotation per login (a pending key beside the current one), section 9.3.
+- A host certificate of a pinned CA, tested; a run against OpenSSH under WSL.
+- What every node kind must do alike, into the TestKit.
+
+**Found on the way:** the node's own SFTP server holds an upload under `<name>.filepart` and puts
+it in place *over* a file of that name when it is renamed; `<name>.part` is a file like any
+other to it, whose rename is refused where the name is taken. The upload area of step 7 has to
+take `.part` and never replace.
 
 ### Step 3 - WWCP_OCPP: device model, reason codes, events
 
