@@ -419,7 +419,53 @@ sign with one key send signatures with one key identifier under one message id, 
 that remembers what it has seen takes the second for a replay. That is what the replay
 cache of the white paper says (section 4.1, "Freshness"); a key is one signer's.
 
-### 3.9 Found on the way, not changed
+### 3.9 OCPP 1.6 as CBOR (WWCP_OCPP 8536eb42, ChargingStation a969bed)
+
+Decision 2 said "2.1 first". OCPP 1.6 followed on 2026-11-13, and the translation moved to
+where both versions find it.
+
+- **One edge for every version** (WWCP_OCPP_Common). What step 5 built into the OCPP 2.1
+  adapter is two classes of the common library now, moved as it was:
+  `MessagesAsCBOR` - the payload of a message from its JSON to its CBOR and back, through
+  the class of the message, for the messages of one assembly - and `OCPPCBOREdge`, the edge
+  of an adapter: what is sent goes the way its connection speaks, what is received as CBOR
+  is handed to the adapter as the JSON array it stands for, and the requests that crossed
+  a CBOR connection are kept until they are answered. An adapter is its host
+  (`IOCPPCBOREdgeHost`) and keeps the names it had as forwarders; `OCPPMessagesAsCBOR` of
+  OCPP 2.1 is the translation of its assembly under the old static names.
+- **`ocpp1.6cbor`.** OCPP 1.6 has a CBOR form (`OCPPSubprotocols.HaveACBORForm`), its
+  servers take it over HTTP WebSockets and over SSH, and the OCPP 1.6 adapter stands at the
+  same edge: nothing but its twelve sending places, the dispatch of a binary frame and the
+  wiring are its own.
+- **Signatures.** A COSE signature signs the CBOR of an OCPP 1.6 message as of an OCPP 2.1
+  one. Which signatures a message gets per connection moved into the common library as well
+  (`SignatureFormatsPerConnection`), so both adapters have `SetSignatureFormats`.
+- **The station.** An OCPP 1.6 connection says `"encoding": "cbor"` or `"auto"` and
+  `"signatureFormats": "cose"` or `"both"` as an OCPP 2.1 connection does; the refusals of
+  step 9 and of 3.8 are gone. The commissioning SSH server takes `ocpp1.6cbor`.
+- **Tests.** OCPP 1.6: the fixtures of the central system's and the charge point's
+  messages, of charging and of the binary streams once more over CBOR, OCPP over SSH,
+  forwarding with CBOR below, above and on both sides, a BootNotification signed with COSE
+  over JSON and over CBOR (`OverCBOR/MessagesOverCBORTests.cs`). The station:
+  `AgainstACentralSystemNodeOverCBORTests` (the program against a central system node of
+  OCPP 1.6), a commissioning tool of OCPP 1.6 in CBOR. `EveryActionCrossesCBORTests` of OCPP 1.6:
+  every action the adapter has a processor for is translated through the class of its
+  message, and every schema sample comes back as it went.
+
+What has no CBOR of its own, in both versions:
+
+- OCPP 1.6: nothing the adapter has a processor for (`EveryActionCrossesCBORTests`). A web
+  payment that started or failed is a `DataTransfer` request of a class of its own, written
+  as CBOR as every `DataTransfer` is. The signature policy and user role messages and
+  `NotifyNetworkTopology` are files of OCPP 1.6 that are commented out: there are no such
+  messages in OCPP 1.6.
+- OCPP 2.1: three messages without an answer - `MessageTransfer`,
+  `NotifyPeriodicEventStream` and `NotifyNetworkTopology` - are carried as what their JSON
+  says, value by value (`CBORJSON`). `GetCRL` and `FlushPeriodicEventStream` are commented
+  out.
+- The messages of the binary format cross CBOR as a byte string, by design (3.3).
+
+### 3.10 Found on the way, not changed
 
 - `OCPP_JSONResponseErrorMessage` writes the overlay form (7 items) and reads the standard
   form (5 items) alone, so a response error in overlay mode is not read back - in JSON, and
