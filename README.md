@@ -251,6 +251,23 @@ HELLO naming another node than the account, is refused. OCPP 1.6 is not served
 this way.
 
 
+### A back end that dials the station
+
+Where the station cannot dial its CSMS or its local controller, they dial it:
+`"ocppServer": { "enabled": true, "port": 9443 }` in `configuration.json`, or
+the **OCPP server** page, starts a WebSocket server for OCPP 2.1 and 2.0.1
+(`"port16"` for OCPP 1.6) - at once, without a restart. OCPP stays as it is;
+only who opens the WebSocket is the other way round.
+
+Nothing gets in that is not written down: on the **Connections** page a
+connection with **The other end dials** ticked, whose URL ends with the name
+the back end comes under (`wss://station.example.org:9443/csms-01`) and whose
+credentials are what it signs in with. From then on it is one of the station's
+connections - told that the station started, answered, and the one in charge
+where it is the oldest that is switched on. The station forwards nothing. More
+in [the station's README](libs/ChargingStation/README.md).
+
+
 ### The log
 
 Everything that happens is written three times over, because the three answer
