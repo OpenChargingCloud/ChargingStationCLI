@@ -214,8 +214,18 @@ jobs:
       # test host beside the results. Without that a hang ran into the step's
       # timeout and said nothing but the last test that had finished - twice
       # on Windows, at 2448dc6 and at 5f322bb.
+      #
+      # Tests that take a third of a second elsewhere take ten to thirty here,
+      # another one in every run: the thread pool of the test host kept work
+      # waiting for up to sixteen seconds. SlowTests (ChargingStationTests)
+      # says so of every test that took five seconds or failed, and where
+      # STATION_TESTS_DUMPS names a directory it takes a dump of the test host
+      # with its heap once the pool kept something waiting for eight seconds -
+      # twice a run at most, uploaded below with the rest.
       - name: Test the station
         timeout-minutes: 30
+        env:
+          STATION_TESTS_DUMPS: ${{ github.workspace }}/artifacts/starved
         run: dotnet test libs/ChargingStation/ChargingStationTests/ChargingStationTests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts --blame-hang-timeout 5m --blame-hang-dump-type mini
 
       # The question no unit test in this repository asks: does it start?
