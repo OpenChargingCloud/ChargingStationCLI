@@ -407,7 +407,7 @@ namespace cloud.charging.open.ChargingStation
             // command line would ever see it. "--v2g-port 0" still asks for
             // any free one, which is now a thing somebody says rather than
             // what they get by saying nothing.
-            UInt16   v2gPort        = V2GOptions.DefaultV2GPort;
+            IPPort   v2gPort        = V2GOptions.DefaultV2GPort;
             String?  v2gCertFile    = null;
             String?  slacUDP        = null;
             var      evseId         = V2GOptions.DefaultEVSEId;
@@ -471,7 +471,7 @@ namespace cloud.charging.open.ChargingStation
                         break;
 
                     case "--v2g-port":
-                        if (i + 1 < rest.Count && UInt16.TryParse(rest[i + 1], out v2gPort))
+                        if (i + 1 < rest.Count && IPPort.TryParse(rest[i + 1], out v2gPort))
                         {
                             i++;
                             v2g = true;
