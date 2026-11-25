@@ -10,11 +10,12 @@ As of 2026-11-25. Code read: Hermod `a95ddebc`, WWCP_Node `81a29fa`, WWCP_OCPP `
 2. **Which network interfaces** take part is set in the configuration, and can also be set on the web interface.
 3. **A host found by Multicast DNS is not simply trusted.** The first key it shows is put to the admin in a trust-on-first-use dialog. Nothing goes over the connection until an admin has confirmed it. This builds on the existing state "written into the configuration, but not confirmed yet" (B.4).
 
-Part A lists what exists. Part B describes what is to be built. Part C lists the open questions.
+Part A lists what exists. Part B describes what is to be built. Part C lists the questions; Achim accepted every proposal there on 2026-11-26.
 
-**Status (2026-11-25):** built in WWCP_Node `68af98f` (pinned in this project's `eb5bd03`):
-- From B.1: `dns.multicast` with `enabled`, `interfaces`, `ipv4` and `ipv6`. The responder part is not built yet.
-- From B.2: `WWCPNode.ResolveHostAsync`, which the new command `ping <host>` uses, e.g. `ping lc1.local`. The connections still use the bare `DNSClient`.
+**Status (2026-11-26):**
+- B.1 without the responder: `dns.multicast` with `enabled`, `interfaces`, `ipv4` and `ipv6` (WWCP_Node `68af98f`, with the command `ping <host>`).
+- B.2: every connection, the connection test and `queryDNS` resolve through `WWCPNode.NameResolver`, which asks Multicast DNS for `.local` where it is switched on; the last ten answers are kept for the DNS page (WWCP_Node `f4a0f448`, WWCP_OCPP `6cec77be`, ChargingStation `638fd465`).
+- Still to be built: B.3 to B.7.
 
 ---
 
@@ -149,7 +150,9 @@ OCPP's DNS controllers do not know Multicast DNS. Proposal: vendor variables on 
 
 ## Part C: Questions
 
-| # | Question | Proposal |
+Decided on 2026-11-26: every proposal below was accepted as written.
+
+| # | Question | Proposal (decided) |
 |---|---|---|
 | Q1 | Should resolving and answering be switchable separately? | Yes: a station often only resolves, a local controller only answers. |
 | Q2 | Should `.local` hosts default to "Ask", or is "Ask" only used when it is set? | Default to "Ask" for `.local` hosts without pins. A `.local` name without a pin is never believed by a CA alone. |
