@@ -15,7 +15,8 @@ Part A lists what exists. Part B describes what is to be built. Part C lists the
 **Status (2026-11-26):**
 - B.1 without the responder: `dns.multicast` with `enabled`, `interfaces`, `ipv4` and `ipv6` (WWCP_Node `68af98f`, with the command `ping <host>`).
 - B.2: every connection, the connection test and `queryDNS` resolve through `WWCPNode.NameResolver`, which asks Multicast DNS for `.local` where it is switched on; the last ten answers are kept for the DNS page (WWCP_Node `f4a0f448`, WWCP_OCPP `6cec77be`, ChargingStation `638fd465`).
-- Still to be built: B.3 to B.7.
+- B.3: `dns.multicast.responder` with `enabled` and `hostName`; the node answers for its name with the addresses of its interfaces, says a conflict and keeps its name, and says goodbye when it stops (WWCP_Node `f6b1fce8`; tested on real UDP port 5353 under Windows and WSL).
+- Still to be built: B.4 to B.7.
 
 ---
 
