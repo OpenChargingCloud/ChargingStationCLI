@@ -12,13 +12,17 @@ As of 2026-11-25. Code read: Hermod `a95ddebc`, WWCP_Node `81a29fa`, WWCP_OCPP `
 
 Part A lists what exists. Part B describes what is to be built. Part C lists the questions; Achim accepted every proposal there on 2026-11-26.
 
-**Status (2026-11-26):**
+**Status (2026-11-26): done.**
 - B.1 without the responder: `dns.multicast` with `enabled`, `interfaces`, `ipv4` and `ipv6` (WWCP_Node `68af98f`, with the command `ping <host>`).
 - B.2: every connection, the connection test and `queryDNS` resolve through `WWCPNode.NameResolver`, which asks Multicast DNS for `.local` where it is switched on; the last ten answers are kept for the DNS page (WWCP_Node `f4a0f448`, WWCP_OCPP `6cec77be`, ChargingStation `638fd465`).
 - B.3: `dns.multicast.responder` with `enabled` and `hostName`; the node answers for its name with the addresses of its interfaces, says a conflict and keeps its name, and says goodbye when it stops (WWCP_Node `f6b1fce8`; tested on real UDP port 5353 under Windows and WSL).
 - B.4: trust on first use "Ask" for ssh:// and wss://, by default for a host under `.local`; confirmed or turned down at `v1/configuration/connections/confirmKey` and `rejectKey` and with the command `connection` (WWCP_Node `2351c9ba`, WWCP_OCPP `ade7ada5`, ChargingStation `7010b867` with the tests end to end).
 - B.5: the card "Multicast DNS" on the DNS page, the key that waits on the Connections page with Confirm and Turn down, a notice above every page, and `mdns status` / `mdns resolve` at the command line (WWCP_Node `17e80a89`; looked at in a browser against a stand-in).
-- Still to be built: B.6 (DNS-SD) and B.7 (Device Model).
+- B.6: services announced by DNS-SD - the station port as `_ocpp._tcp` and `_ocpp-ssh._tcp` - and "Found in this network" on the Connections page (WWCP_Node `51e912fb`, WWCP_OCPP `75129e6c`).
+- B.7: the variables `Multicast*` of DNSClientController and the 1.6 keys `dns.multicast.*` (WWCP_OCPP `75129e6c`).
+- B.8: the tests of each step, end to end with a station that finds `lc1.local` by Multicast DNS, asks and connects once confirmed (ChargingStation `7010b867`), and the responder on real UDP port 5353 under Windows and WSL.
+
+Every step of B.9 is built.
 
 ---
 
