@@ -17,7 +17,8 @@ Part A lists what exists. Part B describes what is to be built. Part C lists the
 - B.2: every connection, the connection test and `queryDNS` resolve through `WWCPNode.NameResolver`, which asks Multicast DNS for `.local` where it is switched on; the last ten answers are kept for the DNS page (WWCP_Node `f4a0f448`, WWCP_OCPP `6cec77be`, ChargingStation `638fd465`).
 - B.3: `dns.multicast.responder` with `enabled` and `hostName`; the node answers for its name with the addresses of its interfaces, says a conflict and keeps its name, and says goodbye when it stops (WWCP_Node `f6b1fce8`; tested on real UDP port 5353 under Windows and WSL).
 - B.4: trust on first use "Ask" for ssh:// and wss://, by default for a host under `.local`; confirmed or turned down at `v1/configuration/connections/confirmKey` and `rejectKey` and with the command `connection` (WWCP_Node `2351c9ba`, WWCP_OCPP `ade7ada5`, ChargingStation `7010b867` with the tests end to end).
-- Still to be built: B.5 to B.7.
+- B.5: the card "Multicast DNS" on the DNS page, the key that waits on the Connections page with Confirm and Turn down, a notice above every page, and `mdns status` / `mdns resolve` at the command line (WWCP_Node `17e80a89`; looked at in a browser against a stand-in).
+- Still to be built: B.6 (DNS-SD) and B.7 (Device Model).
 
 ---
 
